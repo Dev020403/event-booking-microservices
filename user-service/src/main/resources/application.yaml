@@ -1,0 +1,35 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/event-booking-app}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:admin123}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# ── JWT ──────────────────────────────────────────────────────────────────────
+# Secret must be a base64-encoded string of at least 32 random bytes (256 bits).
+# In production, inject via environment variable or a secrets manager — never commit the real value.
+# Generate with: openssl rand -base64 32
+jwt:
+  secret: ${JWT_SECRET:cGxlYXNlLXJlcGxhY2UtdGhpcy13aXRoLWEtc3Ryb25nLXNlY3JldC1rZXk=}
+  access-token-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:900000} # 15 minutes
+  refresh-token-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:604800000} # 7 days
