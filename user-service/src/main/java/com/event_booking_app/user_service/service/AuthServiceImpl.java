@@ -3,6 +3,7 @@ package com.event_booking_app.user_service.service;
 import com.event_booking_app.user_service.dto.AuthResponse;
 import com.event_booking_app.user_service.dto.LoginRequest;
 import com.event_booking_app.user_service.entity.User;
+import com.event_booking_app.user_service.exception.InvalidTokenException;
 import com.event_booking_app.user_service.exception.UserNotFoundException;
 import com.event_booking_app.user_service.repository.UserRepository;
 import com.event_booking_app.user_service.security.JwtService;
@@ -35,8 +36,7 @@ public class AuthServiceImpl implements AuthService {
         );
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new UserNotFoundException(
-                        UUID.fromString("00000000-0000-0000-0000-000000000000")));
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + email));
 
         String accessToken  = jwtService.generateAccessToken(user.getId(), user.getEmail(), user.getRole());
         String refreshToken = jwtService.generateRefreshToken(user.getId());
@@ -50,11 +50,11 @@ public class AuthServiceImpl implements AuthService {
         log.debug("Token refresh requested");
 
         if (!jwtService.isTokenValid(refreshToken)) {
-            throw new io.jsonwebtoken.JwtException("Refresh token is invalid or expired");
+            throw new InvalidTokenException("Refresh token is invalid or expired");
         }
 
         if (!JwtService.TYPE_REFRESH.equals(jwtService.extractTokenType(refreshToken))) {
-            throw new io.jsonwebtoken.JwtException("Provided token is not a refresh token");
+            throw new InvalidTokenException("Provided token is not a refresh token");
         }
 
         UUID userId = UUID.fromString(jwtService.extractSubject(refreshToken));
