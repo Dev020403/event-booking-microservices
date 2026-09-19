@@ -10,6 +10,9 @@ import com.event_booking_app.event_service.entity.Venue;
 import com.event_booking_app.event_service.exception.EventNotFoundException;
 import com.event_booking_app.event_service.exception.UnauthorizedEventAccessException;
 import com.event_booking_app.event_service.exception.VenueNotFoundException;
+import com.event_booking_app.event_service.kafka.EventPublisher;
+import com.event_booking_app.event_service.kafka.event.EventCancelledEvent;
+import com.event_booking_app.event_service.kafka.event.EventCreateEvent;
 import com.event_booking_app.event_service.mapper.EventMapper;
 import com.event_booking_app.event_service.repository.EventRepository;
 import com.event_booking_app.event_service.repository.EventSpecification;
@@ -32,6 +35,7 @@ public class EventServiceImpl implements EventService {
     private final EventRepository eventRepository;
     private final VenueRepository venueRepository;
     private final EventMapper eventMapper;
+    private final EventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -44,6 +48,12 @@ public class EventServiceImpl implements EventService {
         Event event = eventMapper.toEntity(request, venue, organizerUuid);
         Event savedEvent = eventRepository.save(event);
         log.info("Event created successfully with ID: {}", savedEvent.getId());
+
+        //publish event to kafka
+        eventPublisher.publish(
+                event.getId().toString(),
+                new EventCreateEvent(event.getId(), event.getOrganizerId(), event.getTitle())
+        );
 
         return eventMapper.toResponse(savedEvent);
     }
@@ -118,6 +128,12 @@ public class EventServiceImpl implements EventService {
         event.setStatus(EventStatus.CANCELLED);
         Event cancelledEvent = eventRepository.save(event);
         log.info("Event cancelled successfully: {}", cancelledEvent.getId());
+
+        //publish cancel event to kafka
+        eventPublisher.publish(
+                event.getId().toString(),
+                new EventCancelledEvent(event.getId())
+        );
 
         return eventMapper.toResponse(cancelledEvent);
     }

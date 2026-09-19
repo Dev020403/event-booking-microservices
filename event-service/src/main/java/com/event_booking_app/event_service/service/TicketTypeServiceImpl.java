@@ -8,6 +8,9 @@ import com.event_booking_app.event_service.entity.TicketType;
 import com.event_booking_app.event_service.exception.EventNotFoundException;
 import com.event_booking_app.event_service.exception.TicketTypeNotFoundException;
 import com.event_booking_app.event_service.exception.UnauthorizedEventAccessException;
+import com.event_booking_app.event_service.kafka.EventPublisher;
+import com.event_booking_app.event_service.kafka.event.EventCancelledEvent;
+import com.event_booking_app.event_service.kafka.event.TicketTypeCreatedEvent;
 import com.event_booking_app.event_service.mapper.TicketTypeMapper;
 import com.event_booking_app.event_service.repository.EventRepository;
 import com.event_booking_app.event_service.repository.TicketTypeRepository;
@@ -27,6 +30,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     private final TicketTypeRepository ticketTypeRepository;
     private final EventRepository eventRepository;
     private final TicketTypeMapper ticketTypeMapper;
+    private final EventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -40,6 +44,11 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         TicketType ticketType = ticketTypeMapper.toEntity(request, event);
         TicketType savedTicketType = ticketTypeRepository.save(ticketType);
         log.info("Ticket type created successfully with ID: {}", savedTicketType.getId());
+
+        eventPublisher.publish(
+                event.getId().toString(),
+                new TicketTypeCreatedEvent(eventId,ticketType.getId(), ticketType.getName())
+        );
 
         return ticketTypeMapper.toResponse(savedTicketType);
     }
