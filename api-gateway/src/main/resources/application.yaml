@@ -26,6 +26,13 @@ spring:
               filters:
                 - StripPrefix=0
 
+            - id: inventory-service
+              uri: lb://inventory-service
+              predicates:
+                - Path=/api/v1/inventory/**,/api/v1/holds/**
+              filters:
+                - StripPrefix=0
+
 eureka:
   client:
     service-url:
