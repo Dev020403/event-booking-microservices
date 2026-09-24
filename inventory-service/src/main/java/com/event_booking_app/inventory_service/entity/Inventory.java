@@ -7,9 +7,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "inventory", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"event_id", "ticket_type_id"})
-})
+@Table(name = "inventory",
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"event_id", "ticket_type_id"})
+        },
+        indexes = {
+                @Index(name = "idx_inventory_event_ticket", columnList = "event_id, ticket_type_id")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor

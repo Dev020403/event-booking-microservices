@@ -16,9 +16,9 @@ public class OpenApiConfig {
         final String securitySchemeName = "bearerAuth";
         return new OpenAPI()
                 .info(new Info()
-                        .title("Event Service API")
+                        .title("Inventory Service API")
                         .version("1.0")
-                        .description("API documentation for Event Booking App - Event Service"))
+                        .description("API documentation for Event Booking App - Inventory Service"))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
                         .addSecuritySchemes(securitySchemeName,

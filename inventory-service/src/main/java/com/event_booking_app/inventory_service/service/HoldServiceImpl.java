@@ -27,7 +27,7 @@ import java.util.UUID;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class HoldServiceImpl implements HoldService{
+public class HoldServiceImpl implements HoldService {
 
     private final SeatHoldRepository seatHoldRepository;
     private final InventoryRepository inventoryRepository;
@@ -41,30 +41,30 @@ public class HoldServiceImpl implements HoldService{
     @Retryable(
             retryFor = ObjectOptimisticLockingFailureException.class,
             maxAttempts = 3,
-            backoff = @Backoff(delay = 100,multiplier = 2)
+            backoff = @Backoff(delay = 100, multiplier = 2)
     )
     public HoldResponse holdInventory(UUID inventoryId, HoldRequest request) {
         var existing = seatHoldRepository.findByIdempotencyKey(request.getIdempotencyKey());
-        if(existing.isPresent())
-        {
-            log.info("Idempotent hold request - returning existing hold {} for key {}", existing.get().getId(), request.getIdempotencyKey());
+        if (existing.isPresent()) {
+            log.info("Idempotent hold request - returning existing hold {} for key {}",
+                    existing.get().getId(), request.getIdempotencyKey());
             return holdMapper.toResponse(existing.get());
         }
 
         Inventory inventory = inventoryRepository.findById(inventoryId)
-                .orElseThrow(()-> new InventoryNotFoundException(inventoryId));
+                .orElseThrow(() -> new InventoryNotFoundException(inventoryId));
 
-        if(inventory.getAvailableQuantity() < request.getQuantity()){
+        if (inventory.getAvailableQuantity() < request.getQuantity()) {
             throw new InsufficientInventoryException(inventoryId, request.getQuantity(), inventory.getAvailableQuantity());
         }
 
-        //Update inventory as we are holding inventory
+        // Update inventory as we are holding inventory
         inventory.setAvailableQuantity(inventory.getAvailableQuantity() - request.getQuantity());
         inventory.setHeldQuantity(inventory.getHeldQuantity() + request.getQuantity());
         inventoryRepository.save(inventory);
 
-        //Hold seat
-        SeatHold hold = holdMapper.toEntity(inventoryId,  request, defaultTtlMinutes);
+        // Create the hold record
+        SeatHold hold = holdMapper.toEntity(inventoryId, request, defaultTtlMinutes);
         SeatHold savedHold = seatHoldRepository.save(hold);
 
         log.info("Held {} units of inventory {} for user {} (holdId={}, expiresAt={})",
@@ -75,14 +75,11 @@ public class HoldServiceImpl implements HoldService{
     }
 
     @Recover
-    public HoldResponse recoverFromOptimisticLockFailure(
-            ObjectOptimisticLockingFailureException ex, UUID inventoryId, HoldRequest request
-    )
-    {
+    public HoldResponse recoverHoldFromOptimisticLockFailure(
+            ObjectOptimisticLockingFailureException ex, UUID inventoryId, HoldRequest request) {
         log.error("Exhausted retries holding inventory {} for user {} — high contention on this row",
                 inventoryId, request.getUserId(), ex);
-        throw new InsufficientInventoryException(
-                inventoryId, request.getQuantity(), -1);
+        throw new InsufficientInventoryException(inventoryId, request.getQuantity(), -1);
     }
 
     @Override
@@ -90,14 +87,18 @@ public class HoldServiceImpl implements HoldService{
     @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
     public HoldResponse confirmHold(UUID holdId) {
         SeatHold hold = seatHoldRepository.findById(holdId)
-                .orElseThrow(()-> new HoldNotFoundException(holdId));
+                .orElseThrow(() -> new HoldNotFoundException(holdId));
+
+        // Guard: only a HELD hold can be confirmed
+        if (hold.getStatus() != HoldStatus.HELD) {
+            throw new InvalidHoldStateException(holdId, hold.getStatus(), "confirm");
+        }
 
         Inventory inventory = inventoryRepository.findById(hold.getInventoryId())
                 .orElseThrow(() -> new InventoryNotFoundException(hold.getInventoryId()));
 
         inventory.setHeldQuantity(inventory.getHeldQuantity() - hold.getQuantity());
         inventory.setBookedQuantity(inventory.getBookedQuantity() + hold.getQuantity());
-
         inventoryRepository.save(inventory);
 
         hold.setStatus(HoldStatus.CONFIRMED);
@@ -106,6 +107,13 @@ public class HoldServiceImpl implements HoldService{
                 holdId, hold.getQuantity(), hold.getInventoryId());
 
         return holdMapper.toResponse(saved);
+    }
+
+    @Recover
+    public HoldResponse recoverConfirmFromOptimisticLockFailure(
+            ObjectOptimisticLockingFailureException ex, UUID holdId) {
+        log.error("Exhausted retries confirming hold {} — high contention on inventory row", holdId, ex);
+        throw new InvalidHoldStateException("Failed to confirm hold " + holdId + " due to high contention. Please retry.");
     }
 
     @Override
@@ -123,7 +131,15 @@ public class HoldServiceImpl implements HoldService{
         return holdMapper.toResponse(hold);
     }
 
-    void releaseHoldInternal(SeatHold hold, HoldStatus newStatus) {
+    @Override
+    @Transactional(readOnly = true)
+    public HoldResponse getHold(UUID holdId) {
+        SeatHold hold = seatHoldRepository.findById(holdId)
+                .orElseThrow(() -> new HoldNotFoundException(holdId));
+        return holdMapper.toResponse(hold);
+    }
+
+    private void releaseHoldInternal(SeatHold hold, HoldStatus newStatus) {
         Inventory inventory = inventoryRepository.findById(hold.getInventoryId())
                 .orElseThrow(() -> new InventoryNotFoundException(hold.getInventoryId()));
 
@@ -136,12 +152,5 @@ public class HoldServiceImpl implements HoldService{
 
         log.info("{} hold {} — {} units returned to available on inventory {}",
                 newStatus, hold.getId(), hold.getQuantity(), hold.getInventoryId());
-    }
-
-    @Override
-    public HoldResponse getHold(UUID holdId) {
-        SeatHold hold = seatHoldRepository.findById(holdId)
-                .orElseThrow(() -> new HoldNotFoundException(holdId));
-        return holdMapper.toResponse(hold);
     }
 }

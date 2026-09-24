@@ -41,6 +41,9 @@ public class EventServiceImpl implements EventService {
     @Transactional
     public EventResponse createEvent(CreateEventRequest request, String currentUserId) {
         log.info("Creating event '{}' for organizerId {}", request.getTitle(), currentUserId);
+
+        validateDateRange(request.getStartDateTime(), request.getEndDateTime());
+
         Venue venue = venueRepository.findById(request.getVenueId())
                 .orElseThrow(() -> new VenueNotFoundException(request.getVenueId()));
 
@@ -49,10 +52,10 @@ public class EventServiceImpl implements EventService {
         Event savedEvent = eventRepository.save(event);
         log.info("Event created successfully with ID: {}", savedEvent.getId());
 
-        //publish event to kafka
+        // Publish event to Kafka using the persisted ID
         eventPublisher.publish(
-                event.getId().toString(),
-                new EventCreateEvent(event.getId(), event.getOrganizerId(), event.getTitle())
+                savedEvent.getId().toString(),
+                new EventCreateEvent(savedEvent.getId(), savedEvent.getOrganizerId(), savedEvent.getTitle())
         );
 
         return eventMapper.toResponse(savedEvent);
@@ -90,6 +93,9 @@ public class EventServiceImpl implements EventService {
     @Transactional
     public EventResponse updateEvent(UUID id, UpdateEventRequest request, String currentUserId, boolean isAdmin) {
         log.info("Updating event {}", id);
+
+        validateDateRange(request.getStartDateTime(), request.getEndDateTime());
+
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new EventNotFoundException(id));
 
@@ -125,14 +131,19 @@ public class EventServiceImpl implements EventService {
 
         validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can cancel this event");
 
+        if (event.getStatus() == EventStatus.CANCELLED) {
+            log.info("Event {} is already cancelled, returning current state", id);
+            return eventMapper.toResponse(event);
+        }
+
         event.setStatus(EventStatus.CANCELLED);
         Event cancelledEvent = eventRepository.save(event);
         log.info("Event cancelled successfully: {}", cancelledEvent.getId());
 
-        //publish cancel event to kafka
+        // Publish cancel event to Kafka
         eventPublisher.publish(
-                event.getId().toString(),
-                new EventCancelledEvent(event.getId())
+                cancelledEvent.getId().toString(),
+                new EventCancelledEvent(cancelledEvent.getId())
         );
 
         return eventMapper.toResponse(cancelledEvent);
@@ -144,6 +155,12 @@ public class EventServiceImpl implements EventService {
         }
         if (!event.getOrganizerId().toString().equalsIgnoreCase(currentUserId)) {
             throw new UnauthorizedEventAccessException(errorMessage);
+        }
+    }
+
+    private void validateDateRange(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        if (endDateTime != null && startDateTime != null && !endDateTime.isAfter(startDateTime)) {
+            throw new IllegalArgumentException("End date/time must be after start date/time");
         }
     }
 }

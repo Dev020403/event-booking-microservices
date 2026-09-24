@@ -27,7 +27,7 @@ public class TicketTypeController {
             Authentication authentication
     ) {
         String currentUserId = authentication.getName();
-        boolean isAdmin = hasRoleAdmin(authentication);
+        boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         TicketTypeResponse response = ticketTypeService.createTicketType(eventId, request, currentUserId, isAdmin);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -44,14 +44,8 @@ public class TicketTypeController {
             Authentication authentication
     ) {
         String currentUserId = authentication.getName();
-        boolean isAdmin = hasRoleAdmin(authentication);
+        boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         TicketTypeResponse response = ticketTypeService.updateTicketType(id, request, currentUserId, isAdmin);
         return ResponseEntity.ok(response);
-    }
-
-    private boolean hasRoleAdmin(Authentication authentication) {
-        if (authentication == null) return false;
-        return authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> "ROLE_ADMIN".equalsIgnoreCase(grantedAuthority.getAuthority()));
     }
 }

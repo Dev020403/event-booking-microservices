@@ -11,7 +11,7 @@ import java.util.UUID;
 @Table(name = "events", indexes = {
         @Index(name = "idx_event_category", columnList = "category"),
         @Index(name = "idx_event_status", columnList = "status"),
-        @Index(name = "idx_event_organizer", columnList = "organizerId"),
+        @Index(name = "idx_event_organizer", columnList = "organizer_id"),
         @Index(name = "idx_event_venue", columnList = "venue_id")
 })
 @Getter
@@ -46,7 +46,7 @@ public class Event {
     @Column(nullable = false)
     private LocalDateTime endDateTime;
 
-    @Column(nullable = false)
+    @Column(name = "organizer_id", nullable = false)
     private UUID organizerId;
 
     @ManyToOne(fetch = FetchType.LAZY)

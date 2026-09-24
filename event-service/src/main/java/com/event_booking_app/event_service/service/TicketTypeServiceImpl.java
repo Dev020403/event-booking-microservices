@@ -9,7 +9,6 @@ import com.event_booking_app.event_service.exception.EventNotFoundException;
 import com.event_booking_app.event_service.exception.TicketTypeNotFoundException;
 import com.event_booking_app.event_service.exception.UnauthorizedEventAccessException;
 import com.event_booking_app.event_service.kafka.EventPublisher;
-import com.event_booking_app.event_service.kafka.event.EventCancelledEvent;
 import com.event_booking_app.event_service.kafka.event.TicketTypeCreatedEvent;
 import com.event_booking_app.event_service.mapper.TicketTypeMapper;
 import com.event_booking_app.event_service.repository.EventRepository;

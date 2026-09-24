@@ -63,7 +63,7 @@ public class EventController {
             Authentication authentication
     ) {
         String currentUserId = authentication.getName();
-        boolean isAdmin = hasRoleAdmin(authentication);
+        boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.updateEvent(id, request, currentUserId, isAdmin);
         return ResponseEntity.ok(response);
     }
@@ -74,14 +74,9 @@ public class EventController {
             Authentication authentication
     ) {
         String currentUserId = authentication.getName();
-        boolean isAdmin = hasRoleAdmin(authentication);
+        boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.cancelEvent(id, currentUserId, isAdmin);
         return ResponseEntity.ok(response);
     }
 
-    private boolean hasRoleAdmin(Authentication authentication) {
-        if (authentication == null) return false;
-        return authentication.getAuthorities().stream()
-                .anyMatch(grantedAuthority -> "ROLE_ADMIN".equalsIgnoreCase(grantedAuthority.getAuthority()));
-    }
 }

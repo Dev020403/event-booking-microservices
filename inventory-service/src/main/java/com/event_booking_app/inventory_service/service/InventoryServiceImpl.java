@@ -10,22 +10,23 @@ import com.event_booking_app.inventory_service.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class InventoryServiceImpl implements InventoryService{
+public class InventoryServiceImpl implements InventoryService {
 
     private final InventoryRepository inventoryRepository;
     private final InventoryMapper inventoryMapper;
 
     @Override
+    @Transactional
     public InventoryResponse createInventory(CreateInventoryRequest request) {
-        if(inventoryRepository.existsByEventIdAndTicketTypeId(request.getEventId(), request.getTicketTypeId()))
-        {
-            throw new InventoryAlreadyExistsException( request.getEventId(), request.getTicketTypeId());
+        if (inventoryRepository.existsByEventIdAndTicketTypeId(request.getEventId(), request.getTicketTypeId())) {
+            throw new InventoryAlreadyExistsException(request.getEventId(), request.getTicketTypeId());
         }
         Inventory inventory = inventoryMapper.toEntity(request);
         Inventory saved = inventoryRepository.save(inventory);
@@ -37,6 +38,7 @@ public class InventoryServiceImpl implements InventoryService{
     }
 
     @Override
+    @Transactional(readOnly = true)
     public InventoryResponse getInventory(UUID eventId, UUID ticketTypeId) {
         Inventory inventory = inventoryRepository.findByEventIdAndTicketTypeId(eventId, ticketTypeId)
                 .orElseThrow(() -> new InventoryNotFoundException(eventId, ticketTypeId));
@@ -44,6 +46,7 @@ public class InventoryServiceImpl implements InventoryService{
     }
 
     @Override
+    @Transactional(readOnly = true)
     public InventoryResponse getInventoryById(UUID inventoryId) {
         Inventory inventory = inventoryRepository.findById(inventoryId)
                 .orElseThrow(() -> new InventoryNotFoundException(inventoryId));
