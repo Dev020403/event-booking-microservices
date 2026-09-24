@@ -208,6 +208,38 @@ services:
       - kafka
       - service-registry
 
+  # ==========================================
+  # Payment Service
+  # ==========================================
+  payment-service:
+    build:
+      context: ./payment-service
+      dockerfile: Dockerfile
+
+    container_name: payment-service
+    restart: unless-stopped
+
+    ports:
+      - "8084:8084"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/payment_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      JWT_SECRET: ${JWT_SECRET:-cGxlYXNlLXJlcGxhY2UtdGhpcy13aXRoLWEtc3Ryb25nLXNlY3JldC1rZXk=}
+      JWT_ACCESS_EXPIRY_MS: ${JWT_ACCESS_EXPIRY_MS:-900000}
+      JWT_REFRESH_EXPIRY_MS: ${JWT_REFRESH_EXPIRY_MS:-604800000}
+
+    depends_on:
+      - postgres-db
+      - kafka
+      - service-registry
+
 # ==========================================
 # Volumes
 # ==========================================

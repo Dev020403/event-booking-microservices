@@ -13,4 +13,6 @@ public interface HoldService {
     HoldResponse releaseHold(UUID holdId);
 
     HoldResponse getHold(UUID holdId);
+
+    void expireHold(UUID holdId);
 }
