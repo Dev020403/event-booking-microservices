@@ -18,6 +18,7 @@ public class BookingMapper {
                 .quantity(booking.getQuantity())
                 .unitPrice(booking.getUnitPrice())
                 .totalAmount(booking.getTotalAmount())
+                .currency(booking.getCurrency())
                 .status(booking.getStatus())
                 .paymentId(booking.getPaymentId())
                 .idempotencyKey(booking.getIdempotencyKey())

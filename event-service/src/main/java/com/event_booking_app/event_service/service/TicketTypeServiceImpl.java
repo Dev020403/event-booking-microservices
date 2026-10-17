@@ -76,6 +76,9 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
         ticketType.setName(request.getName());
         ticketType.setPrice(request.getPrice());
+        if (request.getCurrency() != null && !request.getCurrency().isBlank()) {
+            ticketType.setCurrency(request.getCurrency());
+        }
         ticketType.setDescription(request.getDescription());
         ticketType.setSalesStartAt(request.getSalesStartAt());
         ticketType.setSalesEndAt(request.getSalesEndAt());

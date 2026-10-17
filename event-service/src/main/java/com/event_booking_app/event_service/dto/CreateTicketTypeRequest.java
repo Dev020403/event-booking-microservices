@@ -24,6 +24,9 @@ public class CreateTicketTypeRequest {
     @DecimalMin(value = "0.0", inclusive = true, message = "Price cannot be negative")
     private BigDecimal price;
 
+    /** ISO 4217 currency code (default: INR) */
+    private String currency = "INR";
+
     private String description;
 
     @NotNull(message = "Sales start date/time is required")

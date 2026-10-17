@@ -22,6 +22,7 @@ public class BookingResponse {
     private Integer quantity;
     private BigDecimal unitPrice;
     private BigDecimal totalAmount;
+    private String currency;
     private BookingStatus status;
     private UUID paymentId;
     private UUID idempotencyKey;

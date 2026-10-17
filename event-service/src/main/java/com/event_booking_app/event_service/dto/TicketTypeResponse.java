@@ -18,6 +18,7 @@ public class TicketTypeResponse {
     private UUID eventId;
     private String name;
     private BigDecimal price;
+    private String currency;
     private String description;
     private LocalDateTime salesStartAt;
     private LocalDateTime salesEndAt;

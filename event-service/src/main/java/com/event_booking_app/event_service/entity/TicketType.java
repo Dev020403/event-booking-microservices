@@ -32,6 +32,10 @@ public class TicketType {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    /** ISO 4217 currency code, e.g. "INR", "USD" */
+    @Column(nullable = false, length = 10)
+    private String currency;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
