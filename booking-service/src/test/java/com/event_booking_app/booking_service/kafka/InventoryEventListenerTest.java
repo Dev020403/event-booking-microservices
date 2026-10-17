@@ -1,0 +1,67 @@
+package com.event_booking_app.booking_service.kafka;
+
+import com.event_booking_app.booking_service.entity.Booking;
+import com.event_booking_app.booking_service.entity.BookingStatus;
+import com.event_booking_app.booking_service.repository.BookingRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+class InventoryEventListenerTest {
+
+    @Mock
+    private BookingRepository bookingRepository;
+
+    private ObjectMapper objectMapper = new ObjectMapper();
+
+    private InventoryEventListener listener;
+
+    @BeforeEach
+    void setUp() {
+        listener = new InventoryEventListener(bookingRepository, objectMapper);
+    }
+
+    @Test
+    void onInventoryMessage_expiredHold_marksBookingExpired() {
+        UUID holdId = UUID.randomUUID();
+        UUID bookingId = UUID.randomUUID();
+        Booking booking = Booking.builder()
+                .id(bookingId)
+                .holdId(holdId)
+                .status(BookingStatus.HELD)
+                .build();
+
+        when(bookingRepository.findByHoldId(holdId)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        String json = String.format("{\"inventoryId\":\"%s\",\"holdId\":\"%s\",\"quantity\":2,\"reason\":\"expired\"}",
+                UUID.randomUUID(), holdId);
+
+        listener.onInventoryMessage(json);
+
+        assertEquals(BookingStatus.EXPIRED, booking.getStatus());
+        verify(bookingRepository).save(booking);
+    }
+
+    @Test
+    void onInventoryMessage_manualRelease_doesNotMarkExpired() {
+        UUID holdId = UUID.randomUUID();
+        String json = String.format("{\"inventoryId\":\"%s\",\"holdId\":\"%s\",\"quantity\":2,\"reason\":\"manual release\"}",
+                UUID.randomUUID(), holdId);
+
+        listener.onInventoryMessage(json);
+
+        verifyNoInteractions(bookingRepository);
+    }
+}
