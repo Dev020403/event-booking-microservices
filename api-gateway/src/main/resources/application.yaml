@@ -40,6 +40,13 @@ spring:
               filters:
                 - StripPrefix=0
 
+            - id: booking-service
+              uri: lb://booking-service
+              predicates:
+                - Path=/api/v1/bookings/**
+              filters:
+                - StripPrefix=0
+
 eureka:
   client:
     service-url:
