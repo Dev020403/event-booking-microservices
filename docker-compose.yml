@@ -30,6 +30,15 @@ services:
       timeout: 5s
       retries: 10
 
+  # ==========================================
+  # redis
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
 
   # ==========================================
   # Zookeeper
@@ -110,9 +119,11 @@ services:
 
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
 
     depends_on:
       - service-registry
+      - redis
 
 
   # ==========================================

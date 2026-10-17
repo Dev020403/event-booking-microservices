@@ -1,7 +1,14 @@
 server:
   port: 8080
 
+jwt:
+  secret: ${JWT_SECRET:cGxlYXNlLXJlcGxhY2UtdGhpcy13aXRoLWEtc3Ryb25nLXNlY3JldC1rZXk=}
+
 spring:
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: 6379
   application:
     name: api-gateway
   cloud:
@@ -18,13 +25,25 @@ spring:
                 - Path=/api/v1/users/**,/api/v1/auth/**
               filters:
                 - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 1
+                    redis-rate-limiter.burstCapacity: 5
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@ipKeyResolver}"
 
             - id: event-service
               uri: lb://event-service
               predicates:
-                - Path=/api/v1/events/**,/api/v1/categories/**,/api/v1/venues,/api/v1/events/{id}/ticket-types, /api/v1/ticket-types/**
+                - Path=/api/v1/events/**,/api/v1/categories/**,/api/v1/venues,/api/v1/events/{id}/ticket-types,/api/v1/ticket-types/**
               filters:
                 - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 20
+                    redis-rate-limiter.burstCapacity: 40
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@ipKeyResolver}"
 
             - id: inventory-service
               uri: lb://inventory-service
@@ -32,6 +51,12 @@ spring:
                 - Path=/api/v1/inventory/**,/api/v1/holds/**
               filters:
                 - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@userKeyResolver}"
 
             - id: payment-service
               uri: lb://payment-service
@@ -39,6 +64,12 @@ spring:
                 - Path=/api/v1/payments/**
               filters:
                 - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 2
+                    redis-rate-limiter.burstCapacity: 5
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@userKeyResolver}"
 
             - id: booking-service
               uri: lb://booking-service
@@ -46,6 +77,12 @@ spring:
                 - Path=/api/v1/bookings/**
               filters:
                 - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 2
+                    redis-rate-limiter.burstCapacity: 5
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@userKeyResolver}"
 
 eureka:
   client:
