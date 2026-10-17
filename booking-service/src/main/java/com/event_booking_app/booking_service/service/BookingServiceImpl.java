@@ -25,7 +25,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -45,16 +44,34 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentClient paymentClient;
     private final BookingEventPublisher eventPublisher;
 
+    /**
+     * Separate bean — NOT self-injected — so Spring's proxy is always used and
+     * @Transactional on its methods is always honoured.
+     */
+    private final BookingTransactionSupport txSupport;
+
     @Value("${payment.default-currency:INR}")
     private String defaultCurrency;
 
+    // ── createBooking ────────────────────────────────────────────────────────
+    //
+    // This method is intentionally NOT annotated with @Transactional.
+    // Reason: we need the HELD booking to be *committed to the database*
+    // before we kick off the payment call.  That way:
+    //  a) BookingTransactionSupport.persistPaymentFailure() can do a findById
+    //     that actually finds a row (Bug 2 fix).
+    //  b) The compensating release-hold logic has a real booking row to update
+    //     so nothing disappears on error.
+    //
+    // Each DB sub-step runs in its own short transaction via txSupport or the
+    // repository's implicit @Transactional.
+    // ─────────────────────────────────────────────────────────────────────────
     @Override
-    @Transactional
     public BookingResponse createBooking(CreateBookingRequest request, String currentUserId) {
         log.info("Creating booking for userId={}, eventId={}, ticketTypeId={}, quantity={}",
                 currentUserId, request.getEventId(), request.getTicketTypeId(), request.getQuantity());
 
-        // 1. Check idempotency
+        // 1. Idempotency check
         if (request.getIdempotencyKey() != null) {
             Optional<Booking> existing = bookingRepository.findByIdempotencyKey(request.getIdempotencyKey());
             if (existing.isPresent()) {
@@ -63,23 +80,25 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // 2. Fetch ticket type from Event Service to verify existence & price
+        // 2. Validate ticket type (existence + event ownership)
         UUID userId = UUID.fromString(currentUserId);
         TicketTypeResponse ticketType = eventClient.getTicketTypeById(request.getTicketTypeId());
         if (ticketType == null) {
             throw new InvalidBookingStateException("Invalid ticket type ID: " + request.getTicketTypeId());
         }
         if (!request.getEventId().equals(ticketType.getEventId())) {
-            throw new InvalidBookingStateException("Ticket type " + request.getTicketTypeId() + " does not belong to event " + request.getEventId());
+            throw new InvalidBookingStateException("Ticket type " + request.getTicketTypeId()
+                    + " does not belong to event " + request.getEventId());
         }
 
-        // 3. Fetch Inventory ID from Inventory Service
+        // 3. Fetch inventory record
         InventoryResponse inventory = inventoryClient.getInventory(request.getEventId(), request.getTicketTypeId());
         if (inventory == null) {
-            throw new InvalidBookingStateException("No inventory found for eventId=" + request.getEventId() + " ticketTypeId=" + request.getTicketTypeId());
+            throw new InvalidBookingStateException("No inventory found for eventId="
+                    + request.getEventId() + " ticketTypeId=" + request.getTicketTypeId());
         }
 
-        // 4. Reserve/Hold seats via Inventory Service
+        // 4. Hold seats in Inventory Service
         HoldRequest holdRequest = HoldRequest.builder()
                 .userId(userId)
                 .quantity(request.getQuantity())
@@ -93,14 +112,16 @@ public class BookingServiceImpl implements BookingService {
             throw new InvalidBookingStateException("Failed to hold inventory for ticket: " + ex.getMessage());
         }
 
+        // Derive currency from ticket type; fall back to configurable default
         BigDecimal unitPrice = ticketType.getPrice();
         BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(request.getQuantity()));
-        // Bug 4: derive currency from ticket type; fall back to configurable default
         String currency = (ticketType.getCurrency() != null && !ticketType.getCurrency().isBlank())
                 ? ticketType.getCurrency()
                 : defaultCurrency;
 
-        // 5. Create initial Booking record
+        // 5. Persist the HELD booking — committed immediately via saveAndFlush inside txSupport.
+        //    Bug 3 fix: saveAndFlush surfaces any DB error here (inside the try/catch) rather
+        //    than at commit-time. If it fails, we release the hold as a compensating action.
         Booking booking = Booking.builder()
                 .userId(userId)
                 .eventId(request.getEventId())
@@ -115,25 +136,29 @@ public class BookingServiceImpl implements BookingService {
                 .idempotencyKey(request.getIdempotencyKey())
                 .build();
 
-        // Bug 3: if saving the booking fails, release the hold as a compensating action
         Booking savedBooking;
         try {
-            savedBooking = bookingRepository.save(booking);
+            // txSupport.saveNewBooking() opens+commits its own transaction and calls saveAndFlush
+            savedBooking = txSupport.saveNewBooking(booking);
         } catch (Exception ex) {
             log.error("Failed to persist booking after holding inventory {}. Releasing hold.", holdResponse.getHoldId());
             try {
                 inventoryClient.releaseHold(holdResponse.getHoldId());
             } catch (Exception releaseEx) {
-                log.error("Failed to release hold {} during booking save rollback: {}", holdResponse.getHoldId(), releaseEx.getMessage());
+                log.error("Failed to release hold {} during booking-save rollback: {}",
+                        holdResponse.getHoldId(), releaseEx.getMessage());
             }
             throw new InvalidBookingStateException("Failed to create booking: " + ex.getMessage());
         }
+        // ── The HELD booking is now committed to the DB. ──
+        // Any subsequent failure can find it by ID and update it to PAYMENT_FAILED.
 
-        // 6. If payment method provided, process payment immediately
+        // 6. Process payment if a payment method was supplied inline
         if (request.getPaymentMethod() != null) {
-            processPaymentAndFinalizeBooking(savedBooking, request.getPaymentMethod(), request.getIdempotencyKey(), currency);
+            processPaymentAndFinalizeBooking(savedBooking, request.getPaymentMethod(),
+                    request.getIdempotencyKey(), currency);
         } else {
-            // Publish created event for downstream notification
+            // Publish booking-created event for downstream services (e.g. notification)
             eventPublisher.publishBookingCreated(BookingCreatedEvent.builder()
                     .bookingId(savedBooking.getId())
                     .userId(savedBooking.getUserId())
@@ -145,9 +170,16 @@ public class BookingServiceImpl implements BookingService {
                     .createdAt(savedBooking.getCreatedAt())
                     .build());
         }
+
         return bookingMapper.toResponse(savedBooking);
     }
 
+    // ── confirmBookingPayment ─────────────────────────────────────────────────
+    //
+    // The booking already exists in the DB before this method is called, so
+    // txSupport.persistPaymentFailure() (REQUIRES_NEW in a separate bean) will
+    // always find it — even when this method's outer @Transactional rolls back.
+    // ─────────────────────────────────────────────────────────────────────────
     @Override
     @Transactional
     public BookingResponse confirmBookingPayment(UUID bookingId, ConfirmPaymentRequest request, String currentUserId) {
@@ -164,7 +196,8 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.HELD && booking.getStatus() != BookingStatus.PENDING) {
             throw new InvalidBookingStateException("Booking cannot be paid. Current status: " + booking.getStatus());
         }
-        // Derive currency stored on booking, fall back to default
+
+        // Derive currency stored on booking, fall back to configured default
         String currency = (booking.getCurrency() != null && !booking.getCurrency().isBlank())
                 ? booking.getCurrency()
                 : defaultCurrency;
@@ -202,7 +235,7 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        // If booking held inventory, release hold
+        // If booking still held inventory, release the hold
         if (booking.getStatus() == BookingStatus.HELD && booking.getHoldId() != null) {
             try {
                 inventoryClient.releaseHold(booking.getHoldId());
@@ -252,8 +285,18 @@ public class BookingServiceImpl implements BookingService {
         return page.map(bookingMapper::toResponse);
     }
 
-    private void processPaymentAndFinalizeBooking(Booking booking, PaymentMethod paymentMethod, UUID idempotencyKey, String currency) {
-        // Bug 4: use currency from ticket type / booking instead of hardcoded "USD"
+    // ─────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Calls the payment service, updates the booking, and publishes events.
+     * May be called with or without an outer @Transactional depending on the
+     * caller; payment failure is recorded via txSupport (separate bean) so
+     * REQUIRES_NEW always works regardless of the caller's transaction state.
+     */
+    private void processPaymentAndFinalizeBooking(Booking booking, PaymentMethod paymentMethod,
+                                                  UUID idempotencyKey, String currency) {
         ProcessPaymentRequest paymentRequest = ProcessPaymentRequest.builder()
                 .bookingId(booking.getId())
                 .amount(booking.getTotalAmount())
@@ -263,16 +306,16 @@ public class BookingServiceImpl implements BookingService {
                 .build();
         try {
             PaymentResponse paymentResponse = paymentClient.processPayment(paymentRequest);
-            // Bug 1 fix: compare against SUCCESS (was COMPLETED, which never matched)
+
             if (paymentResponse != null && paymentResponse.getStatus() == PaymentStatus.SUCCESS) {
-                // Confirm inventory hold
+                // Confirm the inventory hold
                 if (booking.getHoldId() != null) {
                     try {
                         inventoryClient.confirmHold(booking.getHoldId());
                     } catch (Exception e) {
                         log.error("Failed to confirm inventory hold {}: {}", booking.getHoldId(), e.getMessage());
-                        // Bug 2 fix: persist PAYMENT_FAILED in a new transaction so it survives the outer rollback
-                        persistPaymentFailure(booking, "Failed to confirm inventory hold: " + e.getMessage());
+                        txSupport.persistPaymentFailure(booking.getId(), booking.getHoldId(),
+                                "Failed to confirm inventory hold: " + e.getMessage());
                         throw new InvalidBookingStateException("Hold confirmation failed: " + e.getMessage());
                     }
                 }
@@ -280,7 +323,6 @@ public class BookingServiceImpl implements BookingService {
                 booking.setPaymentId(paymentResponse.getId());
                 bookingRepository.save(booking);
 
-                // Publish BookingConfirmedEvent
                 eventPublisher.publishBookingConfirmed(BookingConfirmedEvent.builder()
                         .bookingId(booking.getId())
                         .userId(booking.getUserId())
@@ -292,16 +334,19 @@ public class BookingServiceImpl implements BookingService {
                         .confirmedAt(Instant.now())
                         .build());
                 log.info("Booking {} successfully CONFIRMED with payment {}", booking.getId(), paymentResponse.getId());
+
             } else {
-                // Bug 2 fix: persist failure in REQUIRES_NEW before throwing
-                persistPaymentFailure(booking, "Payment returned failure status");
+                txSupport.persistPaymentFailure(booking.getId(), booking.getHoldId(),
+                        "Payment returned non-SUCCESS status: "
+                                + (paymentResponse != null ? paymentResponse.getStatus() : "null response"));
                 throw new BookingPaymentFailedException("Payment processing returned unsuccessful status");
             }
+
         } catch (BookingPaymentFailedException | InvalidBookingStateException ex) {
             throw ex;
         } catch (Exception ex) {
             log.error("Payment processing failed for booking {}: {}", booking.getId(), ex.getMessage());
-            persistPaymentFailure(booking, ex.getMessage());
+            txSupport.persistPaymentFailure(booking.getId(), booking.getHoldId(), ex.getMessage());
             throw new BookingPaymentFailedException("Payment processing failed: " + ex.getMessage());
         }
     }
@@ -313,28 +358,5 @@ public class BookingServiceImpl implements BookingService {
         if (!booking.getUserId().toString().equals(currentUserId)) {
             throw new AccessDeniedException("You do not have permission to access this booking.");
         }
-    }
-
-    /**
-     * Bug 2 fix: runs in its own transaction (REQUIRES_NEW) so the PAYMENT_FAILED
-     * status is committed to the DB even when the outer @Transactional rolls back
-     * due to an exception thrown after calling this method.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void persistPaymentFailure(Booking booking, String reason) {
-        log.warn("Persisting PAYMENT_FAILED for bookingId={}, reason={}", booking.getId(), reason);
-        // Compensating action: Release hold in Inventory Service
-        if (booking.getHoldId() != null) {
-            try {
-                inventoryClient.releaseHold(booking.getHoldId());
-            } catch (Exception e) {
-                log.error("Failed to release hold {} during payment failure compensating action: {}", booking.getHoldId(), e.getMessage());
-            }
-        }
-        // Re-fetch to avoid stale state in nested transaction
-        bookingRepository.findById(booking.getId()).ifPresent(b -> {
-            b.setStatus(BookingStatus.PAYMENT_FAILED);
-            bookingRepository.save(b);
-        });
     }
 }
