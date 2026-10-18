@@ -10,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -36,11 +37,11 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("@userAuthorizationService.canUpdateUser(#p0, #p1)")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable UUID id,
             @RequestBody UpdateUserRequest request
-            )
-    {
+    ) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
 
@@ -51,12 +52,13 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize( "@userAuthorizationService.canAccessUser(#p0)" )
     public ResponseEntity<UserResponse> getUserById(
             @PathVariable UUID id
-    )
-    {
+    ) {
         return ResponseEntity.ok(userService.getUserById(id));
     }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
