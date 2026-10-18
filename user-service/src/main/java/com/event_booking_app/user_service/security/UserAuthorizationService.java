@@ -46,13 +46,27 @@ public class UserAuthorizationService {
         }
 
         // Customers may update only themselves and cannot change roles.
-        return targetUserId.toString().equals(authentication.getName())
-                && request.role() == null;
+        return targetUserId.toString().equals(authentication.getName());
     }
 
     private boolean isAdmin(Authentication authentication) {
         return authentication.getAuthorities().stream()
                 .anyMatch(authority ->
                         authority.getAuthority().equals("ROLE_ADMIN"));
+    }
+
+    public boolean canUpdateUser(UUID targetUserId) {
+        Authentication authentication =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+
+        if (isAdmin(authentication)) {
+            return true;
+        }
+
+        return targetUserId.toString().equals(authentication.getName());
     }
 }

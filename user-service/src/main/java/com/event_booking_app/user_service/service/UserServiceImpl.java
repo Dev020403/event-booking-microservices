@@ -3,6 +3,7 @@ package com.event_booking_app.user_service.service;
 import com.event_booking_app.user_service.dto.CreateUserRequest;
 import com.event_booking_app.user_service.dto.UpdateUserRequest;
 import com.event_booking_app.user_service.dto.UserResponse;
+import com.event_booking_app.user_service.entity.Role;
 import com.event_booking_app.user_service.entity.User;
 import com.event_booking_app.user_service.exception.EmailAlreadyExistsException;
 import com.event_booking_app.user_service.exception.UserNotFoundException;
@@ -91,5 +92,18 @@ public class UserServiceImpl implements UserService{
     private User findUserOrThrow(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new UserNotFoundException(id));
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateUserRole(UUID userId, Role role) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() ->
+                        new UserNotFoundException("User not found: " + userId));
+
+        user.updateRole(role);
+
+        User updatedUser = userRepository.save(user);
+        return userMapper.toResponse(updatedUser);
     }
 }

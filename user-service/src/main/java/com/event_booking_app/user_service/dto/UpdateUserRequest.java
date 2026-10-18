@@ -13,7 +13,5 @@ public record UpdateUserRequest(
 
         @Email(message = "Email must be a valid address")
         @Size(max = 255, message = "Email must not exceed 255 characters")
-        String email,
-
-        Role role
+        String email
 ) {}

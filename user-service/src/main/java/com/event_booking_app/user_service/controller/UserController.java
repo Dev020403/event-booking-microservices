@@ -2,6 +2,7 @@ package com.event_booking_app.user_service.controller;
 
 import com.event_booking_app.user_service.dto.CreateUserRequest;
 import com.event_booking_app.user_service.dto.UpdateUserRequest;
+import com.event_booking_app.user_service.dto.UpdateUserRoleRequest;
 import com.event_booking_app.user_service.dto.UserResponse;
 import com.event_booking_app.user_service.service.UserService;
 import jakarta.validation.Valid;
@@ -40,7 +41,7 @@ public class UserController {
     @PreAuthorize("@userAuthorizationService.canUpdateUser(#p0, #p1)")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable UUID id,
-            @RequestBody UpdateUserRequest request
+            @Valid @RequestBody UpdateUserRequest request
     ) {
         return ResponseEntity.ok(userService.updateUser(id, request));
     }
@@ -63,5 +64,16 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/role")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserResponse> updateUserRole(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateUserRoleRequest request
+    ) {
+        return ResponseEntity.ok(
+                userService.updateUserRole(id, request.role())
+        );
     }
 }

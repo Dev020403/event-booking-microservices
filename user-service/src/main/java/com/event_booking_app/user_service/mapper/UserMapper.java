@@ -10,14 +10,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class UserMapper {
     public User toEntity(CreateUserRequest request, String passwordHash) {
-        Role role = request.role() != null ? request.role() : Role.CUSTOMER;
 
         return User.builder()
                 .firstName(request.firstName().trim())
                 .lastName(request.lastName().trim())
                 .email(request.email().toLowerCase().trim())
                 .passwordHash(passwordHash)
-                .role(role)
+                .role(Role.CUSTOMER)
                 .build();
     }
     public UserResponse toResponse(User user) {
@@ -50,10 +49,6 @@ public class UserMapper {
             if (!normalizedEmail.equals(user.getEmail())) {
                 user.updateEmail(normalizedEmail);
             }
-        }
-
-        if (request.role() != null && request.role() != user.getRole()) {
-            user.updateRole(request.role());
         }
     }
 }
