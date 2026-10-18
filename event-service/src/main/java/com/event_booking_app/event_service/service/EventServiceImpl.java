@@ -65,17 +65,16 @@ public class EventServiceImpl implements EventService {
     @Transactional(readOnly = true)
     public Page<EventResponse> getEvents(
             EventCategory category,
-            EventStatus status,
             String city,
             LocalDateTime fromDate,
             LocalDateTime toDate,
             Pageable pageable
     ) {
-        log.debug("Searching events with category={}, status={}, city={}, fromDate={}, toDate={}",
-                category, status, city, fromDate, toDate);
+        log.debug("Searching events with category={}, city={}, fromDate={}, toDate={}",
+                category, city, fromDate, toDate);
 
         return eventRepository.findAll(
-                EventSpecification.withFilters(category, status, city, fromDate, toDate),
+                EventSpecification.withFilters(category, city, fromDate, toDate),
                 pageable
         ).map(eventMapper::toResponse);
     }
@@ -83,9 +82,45 @@ public class EventServiceImpl implements EventService {
     @Override
     @Transactional(readOnly = true)
     public EventResponse getEventById(UUID id) {
-        log.debug("Fetching event details for ID: {}", id);
+        log.debug("Fetching published event details for ID: {}", id);
+
+        Event event = eventRepository.findByIdAndStatus(id, EventStatus.PUBLISHED)
+                .orElseThrow(() -> new EventNotFoundException(id));
+
+        return eventMapper.toResponse(event);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<EventResponse> getManagedEvents(
+            EventCategory category,
+            EventStatus status,
+            String city,
+            LocalDateTime fromDate,
+            LocalDateTime toDate,
+            String currentUserId,
+            boolean isAdmin,
+            Pageable pageable
+    ) {
+        UUID organizerUuid = isAdmin ? null : UUID.fromString(currentUserId);
+        log.debug("Fetching managed events for organizerUuid={}, category={}, status={}",
+                organizerUuid, category, status);
+
+        return eventRepository.findAll(
+                EventSpecification.withManagementFilters(organizerUuid, category, status, city, fromDate, toDate),
+                pageable
+        ).map(eventMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public EventResponse getManagedEventById(UUID id, String currentUserId, boolean isAdmin) {
+        log.debug("Fetching managed event details for ID: {}", id);
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new EventNotFoundException(id));
+
+        validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can view this event");
+
         return eventMapper.toResponse(event);
     }
 
@@ -95,11 +130,18 @@ public class EventServiceImpl implements EventService {
         log.info("Updating event {}", id);
 
         validateDateRange(request.getStartDateTime(), request.getEndDateTime());
+        if (request.getStartDateTime() != null && request.getStartDateTime().isBefore(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Start date/time must be in the future");
+        }
 
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new EventNotFoundException(id));
 
         validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can update this event");
+
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot update an event that is " + event.getStatus());
+        }
 
         if (!event.getVenue().getId().equals(request.getVenueId())) {
             Venue newVenue = venueRepository.findById(request.getVenueId())
@@ -110,9 +152,7 @@ public class EventServiceImpl implements EventService {
         event.setTitle(request.getTitle());
         event.setDescription(request.getDescription());
         event.setCategory(request.getCategory());
-        if (request.getStatus() != null) {
-            event.setStatus(request.getStatus());
-        }
+        // Status updates are handled exclusively via explicit publish and cancel operations
         event.setStartDateTime(request.getStartDateTime());
         event.setEndDateTime(request.getEndDateTime());
 
@@ -120,6 +160,35 @@ public class EventServiceImpl implements EventService {
         log.info("Event updated successfully: {}", updatedEvent.getId());
 
         return eventMapper.toResponse(updatedEvent);
+    }
+
+    @Override
+    @Transactional
+    public EventResponse publishEvent(UUID id, String currentUserId, boolean isAdmin) {
+        log.info("Publishing event {}", id);
+        Event event = eventRepository.findById(id)
+                .orElseThrow(() -> new EventNotFoundException(id));
+
+        validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can publish this event");
+
+        if (event.getStatus() == EventStatus.PUBLISHED) {
+            log.info("Event {} is already published, returning current state", id);
+            return eventMapper.toResponse(event);
+        }
+
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot publish an event that is " + event.getStatus());
+        }
+
+        if (event.getStartDateTime().isBefore(LocalDateTime.now())) {
+            throw new IllegalStateException("Cannot publish an event whose start date/time is in the past");
+        }
+
+        event.setStatus(EventStatus.PUBLISHED);
+        Event publishedEvent = eventRepository.save(event);
+        log.info("Event published successfully: {}", publishedEvent.getId());
+
+        return eventMapper.toResponse(publishedEvent);
     }
 
     @Override
@@ -134,6 +203,10 @@ public class EventServiceImpl implements EventService {
         if (event.getStatus() == EventStatus.CANCELLED) {
             log.info("Event {} is already cancelled, returning current state", id);
             return eventMapper.toResponse(event);
+        }
+
+        if (event.getStatus() == EventStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot cancel an event that has already been completed");
         }
 
         event.setStatus(EventStatus.CANCELLED);
@@ -159,7 +232,10 @@ public class EventServiceImpl implements EventService {
     }
 
     private void validateDateRange(LocalDateTime startDateTime, LocalDateTime endDateTime) {
-        if (endDateTime != null && startDateTime != null && !endDateTime.isAfter(startDateTime)) {
+        if (startDateTime == null || endDateTime == null) {
+            throw new IllegalArgumentException("Start date/time and end date/time are required");
+        }
+        if (!endDateTime.isAfter(startDateTime)) {
             throw new IllegalArgumentException("End date/time must be after start date/time");
         }
     }

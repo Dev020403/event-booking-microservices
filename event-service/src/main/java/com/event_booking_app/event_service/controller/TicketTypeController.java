@@ -37,6 +37,21 @@ public class TicketTypeController {
         return ResponseEntity.ok(ticketTypeService.getTicketTypesByEvent(eventId));
     }
 
+    @GetMapping("/api/v1/events/{id}/ticket-types/manage")
+    public ResponseEntity<List<TicketTypeResponse>> getManagedTicketTypesByEvent(
+            @PathVariable("id") UUID eventId,
+            Authentication authentication
+    ) {
+        String currentUserId = authentication.getName();
+        boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
+        return ResponseEntity.ok(ticketTypeService.getManagedTicketTypesByEvent(eventId, currentUserId, isAdmin));
+    }
+
+    @GetMapping("/api/v1/ticket-types/{id}")
+    public ResponseEntity<TicketTypeResponse> getTicketTypeById(@PathVariable("id") UUID id) {
+        return ResponseEntity.ok(ticketTypeService.getTicketTypeById(id));
+    }
+
     @PutMapping("/api/v1/ticket-types/{id}")
     public ResponseEntity<TicketTypeResponse> updateTicketType(
             @PathVariable("id") UUID id,

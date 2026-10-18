@@ -36,7 +36,12 @@ public class SecurityConfig {
                         .accessDeniedHandler(customAccessDeniedHandler)
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // Organizer/Admin management endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/v1/events/manage/**").hasAnyRole("ORGANIZER", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/events/*/ticket-types/manage").hasAnyRole("ORGANIZER", "ADMIN")
+
                         // Public GET endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/v1/categories/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/events/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/venues/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/ticket-types/**").permitAll()

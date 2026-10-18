@@ -10,5 +10,7 @@ import java.util.UUID;
 public interface TicketTypeService {
     TicketTypeResponse createTicketType(UUID eventId, CreateTicketTypeRequest request, String currentUserId, boolean isAdmin);
     List<TicketTypeResponse> getTicketTypesByEvent(UUID eventId);
+    List<TicketTypeResponse> getManagedTicketTypesByEvent(UUID eventId, String currentUserId, boolean isAdmin);
+    TicketTypeResponse getTicketTypeById(UUID ticketTypeId);
     TicketTypeResponse updateTicketType(UUID ticketTypeId, UpdateTicketTypeRequest request, String currentUserId, boolean isAdmin);
 }

@@ -13,8 +13,11 @@ import java.util.UUID;
 
 public interface EventService {
     EventResponse createEvent(CreateEventRequest request, String currentUserId);
-    Page<EventResponse> getEvents(EventCategory category, EventStatus status, String city, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable);
+    Page<EventResponse> getEvents(EventCategory category, String city, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable);
     EventResponse getEventById(UUID id);
+    Page<EventResponse> getManagedEvents(EventCategory category, EventStatus status, String city, LocalDateTime fromDate, LocalDateTime toDate, String currentUserId, boolean isAdmin, Pageable pageable);
+    EventResponse getManagedEventById(UUID id, String currentUserId, boolean isAdmin);
     EventResponse updateEvent(UUID id, UpdateEventRequest request, String currentUserId, boolean isAdmin);
+    EventResponse publishEvent(UUID id, String currentUserId, boolean isAdmin);
     EventResponse cancelEvent(UUID id, String currentUserId, boolean isAdmin);
 }

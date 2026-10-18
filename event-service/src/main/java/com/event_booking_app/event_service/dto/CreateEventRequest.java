@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import jakarta.validation.constraints.Size;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -20,9 +22,11 @@ import java.util.UUID;
 public class CreateEventRequest {
 
     @NotBlank(message = "Title is required")
+    @Size(min = 3, max = 255, message = "Title must be between 3 and 255 characters")
     private String title;
 
     @NotBlank(message = "Description is required")
+    @Size(min = 10, max = 5000, message = "Description must be between 10 and 5000 characters")
     private String description;
 
     @NotNull(message = "Category is required")

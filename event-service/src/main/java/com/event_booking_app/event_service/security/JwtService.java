@@ -1,11 +1,8 @@
+
 package com.event_booking_app.event_service.security;
 
 import com.event_booking_app.event_service.config.JwtProperties;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
@@ -21,9 +18,11 @@ import java.util.function.Function;
 public class JwtService {
 
     public static final String CLAIM_EMAIL = "email";
-    public static final String CLAIM_ROLE  = "role";
-    public static final String CLAIM_TYPE  = "tokenType";
+    public static final String CLAIM_ROLE = "role";
+    public static final String CLAIM_TYPE = "tokenType";
+
     public static final String TYPE_ACCESS = "ACCESS";
+    public static final String TYPE_REFRESH = "REFRESH";
 
     private final JwtProperties jwtProperties;
 
@@ -32,36 +31,68 @@ public class JwtService {
     }
 
     public String extractEmail(String token) {
-        return extractClaim(token, claims -> claims.get(CLAIM_EMAIL, String.class));
+        return extractClaim(
+                token,
+                claims -> claims.get(CLAIM_EMAIL, String.class)
+        );
     }
 
     public String extractRole(String token) {
-        return extractClaim(token, claims -> claims.get(CLAIM_ROLE, String.class));
+        return extractClaim(
+                token,
+                claims -> claims.get(CLAIM_ROLE, String.class)
+        );
     }
 
     public String extractTokenType(String token) {
-        return extractClaim(token, claims -> claims.get(CLAIM_TYPE, String.class));
+        return extractClaim(
+                token,
+                claims -> claims.get(CLAIM_TYPE, String.class)
+        );
     }
 
+    /**
+     * Validates the JWT signature, expiration, and structure.
+     */
     public boolean isTokenValid(String token) {
         try {
             parseClaims(token);
             return true;
         } catch (ExpiredJwtException e) {
-            log.warn("JWT expired: {}", e.getMessage());
+            log.debug("JWT expired");
         } catch (UnsupportedJwtException e) {
-            log.warn("JWT unsupported: {}", e.getMessage());
+            log.debug("JWT unsupported");
         } catch (MalformedJwtException e) {
-            log.warn("JWT malformed: {}", e.getMessage());
+            log.debug("JWT malformed");
         } catch (SecurityException e) {
-            log.warn("JWT signature invalid: {}", e.getMessage());
+            log.debug("JWT signature invalid");
         } catch (IllegalArgumentException e) {
-            log.warn("JWT claims empty: {}", e.getMessage());
+            log.debug("JWT claims or token are empty or invalid");
         }
+
         return false;
     }
 
-    private <T> T extractClaim(String token, Function<Claims, T> resolver) {
+    /**
+     * Only access tokens may authenticate API requests.
+     */
+    public boolean isAccessToken(String token) {
+        if (!isTokenValid(token)) {
+            return false;
+        }
+
+        try {
+            return TYPE_ACCESS.equals(extractTokenType(token));
+        } catch (JwtException | IllegalArgumentException e) {
+            log.debug("JWT token type is invalid");
+            return false;
+        }
+    }
+
+    private <T> T extractClaim(
+            String token,
+            Function<Claims, T> resolver
+    ) {
         return resolver.apply(parseClaims(token));
     }
 
@@ -74,7 +105,10 @@ public class JwtService {
     }
 
     private SecretKey signingKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
+        byte[] keyBytes = Decoders.BASE64.decode(
+                jwtProperties.getSecret()
+        );
+
         return Keys.hmacShaKeyFor(keyBytes);
     }
 }

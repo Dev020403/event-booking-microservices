@@ -4,6 +4,7 @@ import com.event_booking_app.event_service.dto.CreateTicketTypeRequest;
 import com.event_booking_app.event_service.dto.TicketTypeResponse;
 import com.event_booking_app.event_service.dto.UpdateTicketTypeRequest;
 import com.event_booking_app.event_service.entity.Event;
+import com.event_booking_app.event_service.entity.EventStatus;
 import com.event_booking_app.event_service.entity.TicketType;
 import com.event_booking_app.event_service.exception.EventNotFoundException;
 import com.event_booking_app.event_service.exception.TicketTypeNotFoundException;
@@ -18,6 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.Currency;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,13 +43,21 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
         validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can add ticket types to this event");
 
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot add ticket types to an event that is " + event.getStatus());
+        }
+
+        validateCurrency(request.getCurrency());
+        validateSalesDates(request.getSalesStartAt(), request.getSalesEndAt(), event.getStartDateTime());
+
         TicketType ticketType = ticketTypeMapper.toEntity(request, event);
+        ticketType.setCurrency(request.getCurrency().toUpperCase());
         TicketType savedTicketType = ticketTypeRepository.save(ticketType);
         log.info("Ticket type created successfully with ID: {}", savedTicketType.getId());
 
         eventPublisher.publish(
                 event.getId().toString(),
-                new TicketTypeCreatedEvent(eventId,ticketType.getId(), ticketType.getName())
+                new TicketTypeCreatedEvent(eventId, ticketType.getId(), ticketType.getName())
         );
 
         return ticketTypeMapper.toResponse(savedTicketType);
@@ -56,12 +67,39 @@ public class TicketTypeServiceImpl implements TicketTypeService {
     @Transactional(readOnly = true)
     public List<TicketTypeResponse> getTicketTypesByEvent(UUID eventId) {
         log.debug("Fetching ticket types for event {}", eventId);
-        if (!eventRepository.existsById(eventId)) {
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+
+        if (event.getStatus() != EventStatus.PUBLISHED) {
             throw new EventNotFoundException(eventId);
         }
+
         return ticketTypeRepository.findByEventId(eventId).stream()
                 .map(ticketTypeMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TicketTypeResponse> getManagedTicketTypesByEvent(UUID eventId, String currentUserId, boolean isAdmin) {
+        log.debug("Fetching managed ticket types for event {}", eventId);
+        Event event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+
+        validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can view ticket types for this event");
+
+        return ticketTypeRepository.findByEventId(eventId).stream()
+                .map(ticketTypeMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public TicketTypeResponse getTicketTypeById(UUID ticketTypeId) {
+        log.debug("Fetching ticket type details for ID: {}", ticketTypeId);
+        TicketType ticketType = ticketTypeRepository.findById(ticketTypeId)
+                .orElseThrow(() -> new TicketTypeNotFoundException(ticketTypeId));
+        return ticketTypeMapper.toResponse(ticketType);
     }
 
     @Override
@@ -74,11 +112,16 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         Event event = ticketType.getEvent();
         validateOwnership(event, currentUserId, isAdmin, "Only the event organizer or an ADMIN can update ticket types for this event");
 
+        if (event.getStatus() == EventStatus.CANCELLED || event.getStatus() == EventStatus.COMPLETED) {
+            throw new IllegalStateException("Cannot update ticket types for an event that is " + event.getStatus());
+        }
+
+        validateCurrency(request.getCurrency());
+        validateSalesDates(request.getSalesStartAt(), request.getSalesEndAt(), event.getStartDateTime());
+
         ticketType.setName(request.getName());
         ticketType.setPrice(request.getPrice());
-        if (request.getCurrency() != null && !request.getCurrency().isBlank()) {
-            ticketType.setCurrency(request.getCurrency());
-        }
+        ticketType.setCurrency(request.getCurrency().toUpperCase());
         ticketType.setDescription(request.getDescription());
         ticketType.setSalesStartAt(request.getSalesStartAt());
         ticketType.setSalesEndAt(request.getSalesEndAt());
@@ -95,6 +138,29 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         }
         if (!event.getOrganizerId().toString().equalsIgnoreCase(currentUserId)) {
             throw new UnauthorizedEventAccessException(errorMessage);
+        }
+    }
+
+    private void validateCurrency(String currency) {
+        if (currency == null || currency.isBlank()) {
+            throw new IllegalArgumentException("Currency cannot be empty");
+        }
+        try {
+            Currency.getInstance(currency.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid ISO 4217 currency code: " + currency);
+        }
+    }
+
+    private void validateSalesDates(LocalDateTime salesStartAt, LocalDateTime salesEndAt, LocalDateTime eventStartDateTime) {
+        if (salesStartAt == null || salesEndAt == null) {
+            throw new IllegalArgumentException("Sales start and end date/time are required");
+        }
+        if (!salesEndAt.isAfter(salesStartAt)) {
+            throw new IllegalArgumentException("Sales end date/time must be after sales start date/time");
+        }
+        if (eventStartDateTime != null && salesEndAt.isAfter(eventStartDateTime)) {
+            throw new IllegalArgumentException("Ticket sales must end before or when the event starts");
         }
     }
 }
