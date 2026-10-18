@@ -38,7 +38,7 @@ public class UserController {
     }
 
     @PatchMapping("/{id}")
-    @PreAuthorize("@userAuthorizationService.canUpdateUser(#p0, #p1)")
+    @PreAuthorize("@userAuthorizationService.canUpdateUser(#p0)")
     public ResponseEntity<UserResponse> updateUser(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateUserRequest request
