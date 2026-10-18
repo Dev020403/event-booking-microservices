@@ -99,6 +99,11 @@ public class TicketTypeServiceImpl implements TicketTypeService {
         log.debug("Fetching ticket type details for ID: {}", ticketTypeId);
         TicketType ticketType = ticketTypeRepository.findById(ticketTypeId)
                 .orElseThrow(() -> new TicketTypeNotFoundException(ticketTypeId));
+
+        // Public API must not expose ticket types for unpublished events.
+        if (ticketType.getEvent().getStatus() != EventStatus.PUBLISHED) {
+            throw new TicketTypeNotFoundException(ticketTypeId);
+        }
         return ticketTypeMapper.toResponse(ticketType);
     }
 
