@@ -18,7 +18,14 @@ import java.util.function.Function;
 @Slf4j
 public class JwtService {
 
+    public static final String CLAIM_TYPE  = "tokenType";
+    public static final String TYPE_ACCESS = "ACCESS";
+
     private final JwtProperties jwtProperties;
+
+    public String extractTokenType(String token) {
+        return extractClaim(token, claims -> claims.get(CLAIM_TYPE, String.class));
+    }
 
     public String extractSubject(String token) {
         return extractClaim(token, Claims::getSubject);

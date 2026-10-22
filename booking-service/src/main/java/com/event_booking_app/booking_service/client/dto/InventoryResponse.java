@@ -17,6 +17,7 @@ public class InventoryResponse {
     private UUID ticketTypeId;
     private int totalQuantity;
     private int availableQuantity;
-    private int reservedQuantity;
-    private int soldQuantity;
+    // Names must match inventory-service's InventoryResponse or Jackson leaves them at 0
+    private int heldQuantity;
+    private int bookedQuantity;
 }

@@ -2,6 +2,7 @@ package com.event_booking_app.booking_service.kafka;
 
 import com.event_booking_app.booking_service.entity.BookingStatus;
 import com.event_booking_app.booking_service.repository.BookingRepository;
+import com.event_booking_app.booking_service.service.BookingTransactionSupport;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -17,10 +18,13 @@ public class InventoryEventListener {
     private static final Logger log = LoggerFactory.getLogger(InventoryEventListener.class);
 
     private final BookingRepository bookingRepository;
+    private final BookingTransactionSupport txSupport;
     private final ObjectMapper objectMapper;
 
-    public InventoryEventListener(BookingRepository bookingRepository, ObjectMapper objectMapper) {
+    public InventoryEventListener(BookingRepository bookingRepository, BookingTransactionSupport txSupport,
+                                  ObjectMapper objectMapper) {
         this.bookingRepository = bookingRepository;
+        this.txSupport = txSupport;
         this.objectMapper = objectMapper;
     }
 
@@ -35,10 +39,11 @@ public class InventoryEventListener {
                 String reason = node.has("reason") ? node.get("reason").asText() : "";
 
                 if ("expired".equalsIgnoreCase(reason)) {
+                    // Only HELD bookings expire here. A PENDING booking is mid-payment: that
+                    // request will fail to confirm the hold and refund + mark PAYMENT_FAILED
+                    // itself. The compare-and-set also avoids overwriting a concurrent change.
                     bookingRepository.findByHoldId(holdId).ifPresent(booking -> {
-                        if (booking.getStatus() == BookingStatus.HELD || booking.getStatus() == BookingStatus.PENDING) {
-                            booking.setStatus(BookingStatus.EXPIRED);
-                            bookingRepository.save(booking);
+                        if (txSupport.transitionStatus(booking.getId(), BookingStatus.HELD, BookingStatus.EXPIRED)) {
                             log.info("Booking {} marked as EXPIRED because inventory hold {} expired",
                                     booking.getId(), holdId);
                         }
