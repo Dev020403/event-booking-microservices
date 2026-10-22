@@ -30,33 +30,24 @@ public class EventController {
 
     private final EventService eventService;
 
+    @PostMapping
+    public ResponseEntity<EventResponse> createEvent(@Valid @RequestBody CreateEventRequest request, Authentication authentication) {
+        String currentUserId = authentication.getName();
+        EventResponse response = eventService.createEvent(request, currentUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
     @GetMapping
-    public ResponseEntity<Page<EventResponse>> getEvents(
-            @RequestParam(required = false) EventCategory category,
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-            @PageableDefault(size = 20) Pageable pageable
-    ) {
+    public ResponseEntity<Page<EventResponse>> getEvents(@RequestParam(required = false) EventCategory category, @RequestParam(required = false) String city, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate, @PageableDefault(size = 20) Pageable pageable) {
         Page<EventResponse> response = eventService.getEvents(category, city, fromDate, toDate, sanitizePageable(pageable));
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/manage")
-    public ResponseEntity<Page<EventResponse>> getManagedEvents(
-            @RequestParam(required = false) EventCategory category,
-            @RequestParam(required = false) EventStatus status,
-            @RequestParam(required = false) String city,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-            @PageableDefault(size = 20) Pageable pageable,
-            Authentication authentication
-    ) {
+    public ResponseEntity<Page<EventResponse>> getManagedEvents(@RequestParam(required = false) EventCategory category, @RequestParam(required = false) EventStatus status, @RequestParam(required = false) String city, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate, @PageableDefault(size = 20) Pageable pageable, Authentication authentication) {
         String currentUserId = authentication.getName();
         boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
-        Page<EventResponse> response = eventService.getManagedEvents(
-                category, status, city, fromDate, toDate, currentUserId, isAdmin, sanitizePageable(pageable)
-        );
+        Page<EventResponse> response = eventService.getManagedEvents(category, status, city, fromDate, toDate, currentUserId, isAdmin, sanitizePageable(pageable));
         return ResponseEntity.ok(response);
     }
 
@@ -68,10 +59,7 @@ public class EventController {
     }
 
     @GetMapping("/manage/{id}")
-    public ResponseEntity<EventResponse> getManagedEventById(
-            @PathVariable UUID id,
-            Authentication authentication
-    ) {
+    public ResponseEntity<EventResponse> getManagedEventById(@PathVariable UUID id, Authentication authentication) {
         String currentUserId = authentication.getName();
         boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.getManagedEventById(id, currentUserId, isAdmin);
@@ -85,10 +73,7 @@ public class EventController {
     }
 
     @PostMapping("/{id}/publish")
-    public ResponseEntity<EventResponse> publishEvent(
-            @PathVariable UUID id,
-            Authentication authentication
-    ) {
+    public ResponseEntity<EventResponse> publishEvent(@PathVariable UUID id, Authentication authentication) {
         String currentUserId = authentication.getName();
         boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.publishEvent(id, currentUserId, isAdmin);
@@ -96,11 +81,7 @@ public class EventController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<EventResponse> updateEvent(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateEventRequest request,
-            Authentication authentication
-    ) {
+    public ResponseEntity<EventResponse> updateEvent(@PathVariable UUID id, @Valid @RequestBody UpdateEventRequest request, Authentication authentication) {
         String currentUserId = authentication.getName();
         boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.updateEvent(id, request, currentUserId, isAdmin);
@@ -108,10 +89,7 @@ public class EventController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<EventResponse> cancelEvent(
-            @PathVariable UUID id,
-            Authentication authentication
-    ) {
+    public ResponseEntity<EventResponse> cancelEvent(@PathVariable UUID id, Authentication authentication) {
         String currentUserId = authentication.getName();
         boolean isAdmin = SecurityUtils.hasRoleAdmin(authentication);
         EventResponse response = eventService.cancelEvent(id, currentUserId, isAdmin);

@@ -20,13 +20,12 @@ public class EventMapper {
         if (request == null) {
             return null;
         }
-        EventStatus status = request.getStatus() != null ? request.getStatus() : EventStatus.DRAFT;
-
+        // New events always start as DRAFT; status changes go through publish/cancel only
         return Event.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .category(request.getCategory())
-                .status(status)
+                .status(EventStatus.DRAFT)
                 .startDateTime(request.getStartDateTime())
                 .endDateTime(request.getEndDateTime())
                 .organizerId(organizerId)

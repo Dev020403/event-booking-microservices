@@ -8,6 +8,8 @@ import java.util.UUID;
 
 public interface VenueService {
     VenueResponse createVenue(CreateVenueRequest request);
+
     List<VenueResponse> getAllVenues();
+
     VenueResponse getVenueById(UUID id);
 }

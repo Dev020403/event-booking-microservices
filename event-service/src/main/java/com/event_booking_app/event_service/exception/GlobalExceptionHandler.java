@@ -3,6 +3,7 @@ package com.event_booking_app.event_service.exception;
 import com.event_booking_app.event_service.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -123,6 +124,20 @@ public class GlobalExceptionHandler {
             MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
         String message = String.format("Invalid parameter format for '%s'", ex.getName());
         log.warn("Type mismatch [path={}]: {}", request.getRequestURI(), message);
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                message,
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ResponseEntity<ErrorResponse> handlePropertyReference(
+            PropertyReferenceException ex, HttpServletRequest request) {
+        String message = String.format("Invalid sort property '%s'", ex.getPropertyName());
+        log.warn("Invalid sort property [path={}]: {}", request.getRequestURI(), ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.of(
                 HttpStatus.BAD_REQUEST.value(),
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),

@@ -1,7 +1,6 @@
 package com.event_booking_app.event_service.dto;
 
 import com.event_booking_app.event_service.entity.EventCategory;
-import com.event_booking_app.event_service.entity.EventStatus;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -31,8 +30,6 @@ public class CreateEventRequest {
 
     @NotNull(message = "Category is required")
     private EventCategory category;
-
-    private EventStatus status;
 
     @NotNull(message = "Start date/time is required")
     @Future(message = "Start date/time must be in the future")

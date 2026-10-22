@@ -64,8 +64,10 @@ public class JwtService {
             log.debug("JWT unsupported");
         } catch (MalformedJwtException e) {
             log.debug("JWT malformed");
-        } catch (SecurityException e) {
+        } catch (io.jsonwebtoken.security.SecurityException e) {
             log.debug("JWT signature invalid");
+        } catch (JwtException e) {
+            log.debug("JWT rejected: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.debug("JWT claims or token are empty or invalid");
         }

@@ -57,7 +57,7 @@ public class TicketTypeServiceImpl implements TicketTypeService {
 
         eventPublisher.publish(
                 event.getId().toString(),
-                new TicketTypeCreatedEvent(eventId, ticketType.getId(), ticketType.getName())
+                new TicketTypeCreatedEvent(eventId, savedTicketType.getId(), savedTicketType.getName())
         );
 
         return ticketTypeMapper.toResponse(savedTicketType);
