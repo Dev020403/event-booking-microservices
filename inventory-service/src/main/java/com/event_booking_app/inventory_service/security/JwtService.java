@@ -50,8 +50,12 @@ public class JwtService {
             log.warn("JWT unsupported: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             log.warn("JWT malformed: {}", e.getMessage());
-        } catch (SecurityException e) {
+        } catch (io.jsonwebtoken.security.SecurityException e) {
+            // Must be jjwt's SecurityException — the unqualified name resolves to
+            // java.lang.SecurityException, which would let forged signatures escape as 500s.
             log.warn("JWT signature invalid: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.warn("JWT rejected: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.warn("JWT claims empty: {}", e.getMessage());
         }

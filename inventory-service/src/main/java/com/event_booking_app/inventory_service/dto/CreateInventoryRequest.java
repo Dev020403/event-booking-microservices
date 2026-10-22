@@ -22,5 +22,5 @@ public class CreateInventoryRequest {
 
     @NotNull(message = "totalQuantity is required")
     @Min(value = 0, message = "totalQuantity cannot be negative")
-    private int totalQuantity;
+    private Integer totalQuantity;
 }

@@ -23,6 +23,7 @@ import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -43,7 +44,8 @@ public class HoldServiceImpl implements HoldService {
     @Retryable(
             retryFor = ObjectOptimisticLockingFailureException.class,
             maxAttempts = 3,
-            backoff = @Backoff(delay = 100, multiplier = 2)
+            backoff = @Backoff(delay = 100, multiplier = 2),
+            recover = "recoverFromOptimisticLockFailure"
     )
     public HoldResponse holdInventory(UUID inventoryId, HoldRequest request) {
 
@@ -52,9 +54,19 @@ public class HoldServiceImpl implements HoldService {
         // retried) — return the existing hold rather than double-holding.
         var existing = seatHoldRepository.findByIdempotencyKey(request.getIdempotencyKey());
         if (existing.isPresent()) {
+            SeatHold existingHold = existing.get();
+            // A reused key with a different payload is a client bug, not a retry —
+            // silently returning the old hold would hide it.
+            if (!existingHold.getInventoryId().equals(inventoryId)
+                    || existingHold.getQuantity() != request.getQuantity()
+                    || !existingHold.getUserId().equals(request.getUserId())) {
+                throw new InvalidHoldStateException(
+                        "idempotencyKey " + request.getIdempotencyKey()
+                                + " was already used for a different hold request");
+            }
             log.info("Idempotent hold request — returning existing hold {} for key {}",
-                    existing.get().getId(), request.getIdempotencyKey());
-            return holdMapper.toResponse(existing.get());
+                    existingHold.getId(), request.getIdempotencyKey());
+            return holdMapper.toResponse(existingHold);
         }
 
         Inventory inventory = inventoryRepository.findById(inventoryId)
@@ -101,18 +113,28 @@ public class HoldServiceImpl implements HoldService {
         log.error("Exhausted retries holding inventory {} for user {} — high contention on this row",
                 inventoryId, request.getUserId(), ex);
         throw new InsufficientInventoryException(
-                inventoryId, request.getQuantity(), -1); // -1: availability unknown after exhausted retries
+                "Could not hold " + request.getQuantity() + " units for inventory " + inventoryId
+                        + " due to high contention. Please retry.");
     }
 
+    // Each @Retryable names its @Recover explicitly: confirm, release and expire
+    // recoverers share the (exception, UUID) signature, so implicit matching is ambiguous.
     @Override
     @Transactional
-    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2),
+            recover = "recoverConfirmFromOptimisticLockFailure")
     public HoldResponse confirmHold(UUID holdId) {
         SeatHold hold = seatHoldRepository.findById(holdId)
                 .orElseThrow(() -> new HoldNotFoundException(holdId));
 
         if (hold.getStatus() != HoldStatus.HELD) {
             throw new InvalidHoldStateException(holdId, hold.getStatus(), "confirm");
+        }
+
+        // The expiry job may not have swept this hold yet — its TTL still applies.
+        if (!hold.getExpiresAt().isAfter(Instant.now())) {
+            throw new InvalidHoldStateException(
+                    "Cannot confirm hold " + holdId + " — it expired at " + hold.getExpiresAt());
         }
 
         Inventory inventory = inventoryRepository.findById(hold.getInventoryId())
@@ -145,7 +167,8 @@ public class HoldServiceImpl implements HoldService {
 
     @Override
     @Transactional
-    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2),
+            recover = "recoverReleaseFromOptimisticLockFailure")
     public HoldResponse releaseHold(UUID holdId) {
         SeatHold hold = seatHoldRepository.findById(holdId)
                 .orElseThrow(() -> new HoldNotFoundException(holdId));
@@ -201,7 +224,8 @@ public class HoldServiceImpl implements HoldService {
 
     @Override
     @Transactional
-    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2))
+    @Retryable(retryFor = ObjectOptimisticLockingFailureException.class, maxAttempts = 3, backoff = @Backoff(delay = 100, multiplier = 2),
+            recover = "recoverExpireFromOptimisticLockFailure")
     public void expireHold(UUID holdId) {
         SeatHold hold = seatHoldRepository.findById(holdId)
                 .orElseThrow(() -> new HoldNotFoundException(holdId));
