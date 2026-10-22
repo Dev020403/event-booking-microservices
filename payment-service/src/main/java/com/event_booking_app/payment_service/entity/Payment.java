@@ -22,6 +22,12 @@ public class Payment {
     @Column(name = "booking_id", nullable = false)
     private UUID bookingId;
 
+    // Owner (JWT subject of the caller that created the payment). Used to stop users
+    // reading or refunding other users' payments. Nullable for rows created before
+    // this column existed — those are admin-only.
+    @Column(name = "user_id")
+    private UUID userId;
+
     @Column(nullable = false)
     private BigDecimal amount;
 

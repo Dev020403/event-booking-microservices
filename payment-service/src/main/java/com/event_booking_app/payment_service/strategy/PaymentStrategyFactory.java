@@ -2,15 +2,15 @@ package com.event_booking_app.payment_service.strategy;
 
 import com.event_booking_app.payment_service.entity.PaymentMethod;
 import com.event_booking_app.payment_service.exception.UnsupportedPaymentMethodException;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+// No @RequiredArgsConstructor: Lombok would add a second (Map) constructor next to
+// the List one below, and Spring can't pick between two non-default constructors.
 @Component
-@RequiredArgsConstructor
 public class PaymentStrategyFactory {
     private final Map<PaymentMethod, PaymentStrategy> strategies;
 

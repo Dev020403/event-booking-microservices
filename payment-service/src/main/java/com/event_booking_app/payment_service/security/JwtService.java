@@ -3,6 +3,7 @@ package com.event_booking_app.payment_service.security;
 import com.event_booking_app.payment_service.config.JwtProperties;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.UnsupportedJwtException;
@@ -23,8 +24,13 @@ public class JwtService {
     public static final String CLAIM_EMAIL = "email";
     public static final String CLAIM_ROLE  = "role";
     public static final String CLAIM_TYPE  = "tokenType";
+    public static final String TYPE_ACCESS = "ACCESS";
 
     private final JwtProperties jwtProperties;
+
+    public String extractTokenType(String token) {
+        return extractClaim(token, claims -> claims.get(CLAIM_TYPE, String.class));
+    }
 
     public String extractSubject(String token) {
         return extractClaim(token, Claims::getSubject);
@@ -48,8 +54,12 @@ public class JwtService {
             log.warn("JWT unsupported: {}", e.getMessage());
         } catch (MalformedJwtException e) {
             log.warn("JWT malformed: {}", e.getMessage());
-        } catch (SecurityException e) {
+        } catch (io.jsonwebtoken.security.SecurityException e) {
+            // Must be jjwt's SecurityException — the unqualified name resolves to
+            // java.lang.SecurityException, which would let forged signatures escape as 500s.
             log.warn("JWT signature invalid: {}", e.getMessage());
+        } catch (JwtException e) {
+            log.warn("JWT rejected: {}", e.getMessage());
         } catch (IllegalArgumentException e) {
             log.warn("JWT claims empty: {}", e.getMessage());
         }

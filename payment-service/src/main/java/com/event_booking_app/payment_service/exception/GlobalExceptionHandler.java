@@ -3,6 +3,7 @@ package com.event_booking_app.payment_service.exception;
 import com.event_booking_app.payment_service.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -58,6 +59,34 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(errorResponse);
+    }
+
+    @ExceptionHandler(PaymentConflictException.class)
+    public ResponseEntity<ErrorResponse> handlePaymentConflict(
+            PaymentConflictException ex, HttpServletRequest request) {
+        log.warn("Payment conflict [path={}]: {}", request.getRequestURI(), ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    // e.g. two concurrent requests with the same idempotency key — the loser's insert
+    // hits the unique constraint before any charge is made.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleDataIntegrity(
+            DataIntegrityViolationException ex, HttpServletRequest request) {
+        log.warn("Data integrity violation [path={}]: {}", request.getRequestURI(), ex.getMostSpecificCause().getMessage());
+        ErrorResponse errorResponse = ErrorResponse.of(
+                HttpStatus.CONFLICT.value(),
+                HttpStatus.CONFLICT.getReasonPhrase(),
+                "Request conflicts with an existing payment",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -50,5 +50,3 @@ jwt:
   access-token-expiry-ms: ${JWT_ACCESS_EXPIRY_MS:900000}
   refresh-token-expiry-ms: ${JWT_REFRESH_EXPIRY_MS:604800000}
 
-inventory:
-  default-initial-quantity: 10

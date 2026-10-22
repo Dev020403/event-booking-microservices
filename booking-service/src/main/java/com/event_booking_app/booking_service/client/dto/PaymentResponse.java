@@ -18,7 +18,9 @@ public class PaymentResponse {
     private UUID bookingId;
     private BigDecimal amount;
     private String currency;
-    private PaymentMethod paymentMethod;
+    // String, not PaymentMethod: Payment Service reports card payments as "CARD",
+    // which isn't in Booking's enum and would fail deserialization of a successful charge.
+    private String paymentMethod;
     private PaymentStatus status;
     private String providerTransactionId;
     private UUID idempotencyKey;
