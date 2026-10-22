@@ -88,8 +88,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 String authority = role.startsWith("ROLE_") ? role : "ROLE_" + role;
                 List<SimpleGrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(authority));
 
+                // Email is optional — a token without it still authenticates, the user
+                // just won't receive email notifications.
+                String email = jwtService.extractEmail(token);
+
                 UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                        new UsernamePasswordAuthenticationToken(new AuthenticatedUser(userId, email), null, authorities);
 
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);

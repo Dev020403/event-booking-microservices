@@ -14,6 +14,7 @@
         <module name="api-gateway" />
         <module name="user-service" />
         <module name="service-registry" />
+        <module name="notification-service" />
       </profile>
     </annotationProcessing>
   </component>
@@ -23,6 +24,7 @@
       <module name="booking-service" options="-parameters" />
       <module name="event-service" options="-parameters" />
       <module name="inventory-service" options="-parameters" />
+      <module name="notification-service" options="-parameters" />
       <module name="payment-service" options="-parameters" />
       <module name="service-registry" options="-parameters" />
       <module name="user-service" options="-parameters" />

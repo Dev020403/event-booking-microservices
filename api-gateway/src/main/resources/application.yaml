@@ -84,6 +84,20 @@ spring:
                     redis-rate-limiter.requestedTokens: 1
                     key-resolver: "#{@userKeyResolver}"
 
+            # Higher limit than other routes: clients poll the unread count
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+              filters:
+                - StripPrefix=0
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+                    redis-rate-limiter.requestedTokens: 1
+                    key-resolver: "#{@userKeyResolver}"
+
 eureka:
   client:
     service-url:

@@ -2,6 +2,7 @@ package com.event_booking_app.booking_service.kafka;
 
 import com.event_booking_app.booking_service.entity.Booking;
 import com.event_booking_app.booking_service.entity.BookingStatus;
+import com.event_booking_app.booking_service.kafka.event.BookingExpiredEvent;
 import com.event_booking_app.booking_service.repository.BookingRepository;
 import com.event_booking_app.booking_service.service.BookingTransactionSupport;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,13 +26,16 @@ class InventoryEventListenerTest {
     @Mock
     private BookingTransactionSupport txSupport;
 
+    @Mock
+    private BookingEventPublisher eventPublisher;
+
     private ObjectMapper objectMapper = new ObjectMapper();
 
     private InventoryEventListener listener;
 
     @BeforeEach
     void setUp() {
-        listener = new InventoryEventListener(bookingRepository, txSupport, objectMapper);
+        listener = new InventoryEventListener(bookingRepository, txSupport, eventPublisher, objectMapper);
     }
 
     @Test
@@ -53,6 +57,8 @@ class InventoryEventListenerTest {
         listener.onInventoryMessage(json);
 
         verify(txSupport).transitionStatus(bookingId, BookingStatus.HELD, BookingStatus.EXPIRED);
+        verify(eventPublisher).publishBookingExpired(argThat((BookingExpiredEvent e) ->
+                bookingId.equals(e.getBookingId()) && BookingExpiredEvent.TYPE.equals(e.getEventType())));
     }
 
     @Test
@@ -63,6 +69,6 @@ class InventoryEventListenerTest {
 
         listener.onInventoryMessage(json);
 
-        verifyNoInteractions(bookingRepository, txSupport);
+        verifyNoInteractions(bookingRepository, txSupport, eventPublisher);
     }
 }

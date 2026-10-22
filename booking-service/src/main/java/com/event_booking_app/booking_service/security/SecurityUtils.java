@@ -16,4 +16,12 @@ public final class SecurityUtils {
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ADMIN"));
     }
+
+    /** The caller's email from the access token, or null if the token had none. */
+    public static String getEmail(Authentication authentication) {
+        if (authentication != null && authentication.getPrincipal() instanceof AuthenticatedUser user) {
+            return user.email();
+        }
+        return null;
+    }
 }

@@ -67,15 +67,16 @@ public class BookingTransactionSupport {
      * @param reason    human-readable failure reason (for logging)
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void persistPaymentFailure(UUID bookingId, String reason) {
+    public boolean persistPaymentFailure(UUID bookingId, String reason) {
         log.warn("Persisting PAYMENT_FAILED for bookingId={}, reason={}", bookingId, reason);
 
         int updated = bookingRepository.transitionStatus(
                 bookingId, BookingStatus.PENDING, BookingStatus.PAYMENT_FAILED, Instant.now());
         if (updated == 1) {
             log.info("Booking {} status set to PAYMENT_FAILED", bookingId);
-        } else {
-            log.error("Could not mark booking {} PAYMENT_FAILED — it was not PENDING", bookingId);
+            return true;
         }
+        log.error("Could not mark booking {} PAYMENT_FAILED — it was not PENDING", bookingId);
+        return false;
     }
 }

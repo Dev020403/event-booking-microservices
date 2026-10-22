@@ -1,6 +1,7 @@
 package com.event_booking_app.booking_service.kafka;
 
 import com.event_booking_app.booking_service.entity.BookingStatus;
+import com.event_booking_app.booking_service.kafka.event.BookingExpiredEvent;
 import com.event_booking_app.booking_service.repository.BookingRepository;
 import com.event_booking_app.booking_service.service.BookingTransactionSupport;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -10,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Component
@@ -19,12 +21,14 @@ public class InventoryEventListener {
 
     private final BookingRepository bookingRepository;
     private final BookingTransactionSupport txSupport;
+    private final BookingEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
     public InventoryEventListener(BookingRepository bookingRepository, BookingTransactionSupport txSupport,
-                                  ObjectMapper objectMapper) {
+                                  BookingEventPublisher eventPublisher, ObjectMapper objectMapper) {
         this.bookingRepository = bookingRepository;
         this.txSupport = txSupport;
+        this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
     }
 
@@ -46,6 +50,15 @@ public class InventoryEventListener {
                         if (txSupport.transitionStatus(booking.getId(), BookingStatus.HELD, BookingStatus.EXPIRED)) {
                             log.info("Booking {} marked as EXPIRED because inventory hold {} expired",
                                     booking.getId(), holdId);
+                            eventPublisher.publishBookingExpired(BookingExpiredEvent.builder()
+                                    .bookingId(booking.getId())
+                                    .userId(booking.getUserId())
+                                    .userEmail(booking.getUserEmail())
+                                    .eventId(booking.getEventId())
+                                    .ticketTypeId(booking.getTicketTypeId())
+                                    .quantity(booking.getQuantity())
+                                    .expiredAt(Instant.now())
+                                    .build());
                         }
                     });
                 }

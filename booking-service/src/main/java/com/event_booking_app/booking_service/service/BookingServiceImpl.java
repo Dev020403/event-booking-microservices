@@ -17,6 +17,7 @@ import com.event_booking_app.booking_service.kafka.BookingEventPublisher;
 import com.event_booking_app.booking_service.kafka.event.BookingCancelledEvent;
 import com.event_booking_app.booking_service.kafka.event.BookingConfirmedEvent;
 import com.event_booking_app.booking_service.kafka.event.BookingCreatedEvent;
+import com.event_booking_app.booking_service.kafka.event.BookingPaymentFailedEvent;
 import com.event_booking_app.booking_service.mapper.BookingMapper;
 import com.event_booking_app.booking_service.repository.BookingRepository;
 import lombok.RequiredArgsConstructor;
@@ -72,7 +73,7 @@ public class BookingServiceImpl implements BookingService {
     // calls can no longer both charge the customer.
     // ─────────────────────────────────────────────────────────────────────────
     @Override
-    public BookingResponse createBooking(CreateBookingRequest request, String currentUserId) {
+    public BookingResponse createBooking(CreateBookingRequest request, String currentUserId, String currentUserEmail) {
         log.info("Creating booking for userId={}, eventId={}, ticketTypeId={}, quantity={}",
                 currentUserId, request.getEventId(), request.getTicketTypeId(), request.getQuantity());
 
@@ -136,6 +137,7 @@ public class BookingServiceImpl implements BookingService {
         // 6. Persist the HELD booking — committed immediately via saveAndFlush inside txSupport.
         Booking booking = Booking.builder()
                 .userId(userId)
+                .userEmail(currentUserEmail)
                 .eventId(request.getEventId())
                 .ticketTypeId(request.getTicketTypeId())
                 .inventoryId(inventory.getId())
@@ -181,10 +183,12 @@ public class BookingServiceImpl implements BookingService {
         eventPublisher.publishBookingCreated(BookingCreatedEvent.builder()
                 .bookingId(savedBooking.getId())
                 .userId(savedBooking.getUserId())
+                .userEmail(savedBooking.getUserEmail())
                 .eventId(savedBooking.getEventId())
                 .ticketTypeId(savedBooking.getTicketTypeId())
                 .quantity(savedBooking.getQuantity())
                 .totalAmount(savedBooking.getTotalAmount())
+                .currency(savedBooking.getCurrency())
                 .status(savedBooking.getStatus().name())
                 .createdAt(savedBooking.getCreatedAt())
                 .build());
@@ -220,6 +224,7 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = findBooking(bookingId);
         validateBookingOwnership(booking, currentUserId, isAdmin);
 
+        boolean refunded = false;
         switch (booking.getStatus()) {
             case CANCELLED:
                 return bookingMapper.toResponse(booking);
@@ -245,6 +250,7 @@ public class BookingServiceImpl implements BookingService {
                         log.error("Failed to refund payment for booking {}: {}", booking.getId(), ex.getMessage());
                         throw new InvalidBookingStateException("Failed to refund payment: " + ex.getMessage());
                     }
+                    refunded = true;
                 }
                 if (!txSupport.transitionStatus(bookingId, BookingStatus.CONFIRMED, BookingStatus.CANCELLED)) {
                     throw concurrentChange(bookingId);
@@ -264,9 +270,11 @@ public class BookingServiceImpl implements BookingService {
         eventPublisher.publishBookingCancelled(BookingCancelledEvent.builder()
                 .bookingId(saved.getId())
                 .userId(saved.getUserId())
+                .userEmail(saved.getUserEmail())
                 .eventId(saved.getEventId())
                 .ticketTypeId(saved.getTicketTypeId())
                 .quantity(saved.getQuantity())
+                .refunded(refunded)
                 .cancelledAt(Instant.now())
                 .build());
 
@@ -333,7 +341,7 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getHoldId() != null) {
             String holdProblem = checkHoldStillActive(booking.getHoldId());
             if (holdProblem != null) {
-                failPayment(bookingId, booking.getHoldId(), holdProblem);
+                failPayment(booking,holdProblem);
                 throw new InvalidBookingStateException("Booking can no longer be paid: " + holdProblem);
             }
         }
@@ -351,12 +359,12 @@ public class BookingServiceImpl implements BookingService {
             paymentResponse = paymentClient.processPayment(paymentRequest);
         } catch (Exception ex) {
             log.error("Payment processing failed for booking {}: {}", bookingId, ex.getMessage());
-            failPayment(bookingId, booking.getHoldId(), ex.getMessage());
+            failPayment(booking,ex.getMessage());
             throw new BookingPaymentFailedException("Payment processing failed: " + ex.getMessage());
         }
 
         if (paymentResponse == null || paymentResponse.getStatus() != PaymentStatus.SUCCESS) {
-            failPayment(bookingId, booking.getHoldId(), "Payment returned non-SUCCESS status: "
+            failPayment(booking,"Payment returned non-SUCCESS status: "
                     + (paymentResponse != null ? paymentResponse.getStatus() : "null response"));
             throw new BookingPaymentFailedException("Payment processing returned unsuccessful status");
         }
@@ -368,7 +376,7 @@ public class BookingServiceImpl implements BookingService {
             } catch (Exception e) {
                 log.error("Failed to confirm inventory hold {}: {}", booking.getHoldId(), e.getMessage());
                 refundQuietly(paymentResponse.getId(), bookingId);
-                failPayment(bookingId, booking.getHoldId(), "Failed to confirm inventory hold: " + e.getMessage());
+                failPayment(booking,"Failed to confirm inventory hold: " + e.getMessage());
                 throw new InvalidBookingStateException("Hold confirmation failed: " + e.getMessage());
             }
         }
@@ -384,10 +392,12 @@ public class BookingServiceImpl implements BookingService {
         eventPublisher.publishBookingConfirmed(BookingConfirmedEvent.builder()
                 .bookingId(confirmed.getId())
                 .userId(confirmed.getUserId())
+                .userEmail(confirmed.getUserEmail())
                 .eventId(confirmed.getEventId())
                 .ticketTypeId(confirmed.getTicketTypeId())
                 .quantity(confirmed.getQuantity())
                 .totalAmount(confirmed.getTotalAmount())
+                .currency(confirmed.getCurrency())
                 .paymentId(paymentResponse.getId())
                 .confirmedAt(Instant.now())
                 .build());
@@ -414,11 +424,24 @@ public class BookingServiceImpl implements BookingService {
         return null;
     }
 
-    private void failPayment(UUID bookingId, UUID holdId, String reason) {
-        if (holdId != null) {
-            releaseHoldQuietly(holdId, "payment failure");
+    private void failPayment(Booking booking, String reason) {
+        if (booking.getHoldId() != null) {
+            releaseHoldQuietly(booking.getHoldId(), "payment failure");
         }
-        txSupport.persistPaymentFailure(bookingId, reason);
+        if (txSupport.persistPaymentFailure(booking.getId(), reason)) {
+            eventPublisher.publishBookingPaymentFailed(BookingPaymentFailedEvent.builder()
+                    .bookingId(booking.getId())
+                    .userId(booking.getUserId())
+                    .userEmail(booking.getUserEmail())
+                    .eventId(booking.getEventId())
+                    .ticketTypeId(booking.getTicketTypeId())
+                    .quantity(booking.getQuantity())
+                    .totalAmount(booking.getTotalAmount())
+                    .currency(booking.getCurrency())
+                    .reason(reason)
+                    .failedAt(Instant.now())
+                    .build());
+        }
     }
 
     private void releaseHoldQuietly(UUID holdId, String context) {

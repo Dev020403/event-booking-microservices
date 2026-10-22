@@ -19,12 +19,17 @@ import java.util.function.Function;
 public class JwtService {
 
     public static final String CLAIM_TYPE  = "tokenType";
+    public static final String CLAIM_EMAIL = "email";
     public static final String TYPE_ACCESS = "ACCESS";
 
     private final JwtProperties jwtProperties;
 
     public String extractTokenType(String token) {
         return extractClaim(token, claims -> claims.get(CLAIM_TYPE, String.class));
+    }
+
+    public String extractEmail(String token) {
+        return extractClaim(token, claims -> claims.get(CLAIM_EMAIL, String.class));
     }
 
     public String extractSubject(String token) {

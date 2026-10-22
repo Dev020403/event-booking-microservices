@@ -1,0 +1,85 @@
+server:
+  port: 8086
+
+spring:
+  application:
+    name: notification-service
+
+  # Credentials have no defaults on purpose — supply them via environment
+  # (docker-compose does this). See README.md for running locally.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/notification_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # Schema is owned by Flyway; Hibernate only checks it matches the entities.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    show-sql: false
+
+  flyway:
+    enabled: true
+
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    consumer:
+      group-id: notification-service
+
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1025}
+    username: ${SPRING_MAIL_USERNAME:}
+    password: ${SPRING_MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_SMTP_STARTTLS:false}
+          # Fail fast instead of blocking the Kafka listener on a hung SMTP server
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: ${JWT_SECRET}
+
+notification:
+  email:
+    enabled: ${NOTIFICATION_EMAIL_ENABLED:true}
+    from: ${NOTIFICATION_EMAIL_FROM:no-reply@event-booking.local}
+    max-attempts: ${NOTIFICATION_EMAIL_MAX_ATTEMPTS:5}
+    retry-interval-ms: ${NOTIFICATION_EMAIL_RETRY_INTERVAL_MS:60000}
+    sending-timeout-ms: 300000
+    retry-batch-size: 50
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  # Mail is not a hard dependency: email failures are retried, in-app delivery still works.
+  health:
+    mail:
+      enabled: false
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

@@ -30,6 +30,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -93,7 +94,7 @@ class BookingControllerTest {
                 .status(BookingStatus.HELD)
                 .build();
 
-        when(bookingService.createBooking(any(CreateBookingRequest.class), eq(userId.toString())))
+        when(bookingService.createBooking(any(CreateBookingRequest.class), eq(userId.toString()), isNull()))
                 .thenReturn(response);
 
         mockMvc.perform(post("/api/v1/bookings")

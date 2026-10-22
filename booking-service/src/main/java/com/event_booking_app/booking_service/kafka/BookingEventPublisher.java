@@ -3,6 +3,8 @@ package com.event_booking_app.booking_service.kafka;
 import com.event_booking_app.booking_service.kafka.event.BookingCancelledEvent;
 import com.event_booking_app.booking_service.kafka.event.BookingConfirmedEvent;
 import com.event_booking_app.booking_service.kafka.event.BookingCreatedEvent;
+import com.event_booking_app.booking_service.kafka.event.BookingExpiredEvent;
+import com.event_booking_app.booking_service.kafka.event.BookingPaymentFailedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -28,6 +30,14 @@ public class BookingEventPublisher {
     }
 
     public void publishBookingCancelled(BookingCancelledEvent event) {
+        publish(event.getBookingId().toString(), event);
+    }
+
+    public void publishBookingPaymentFailed(BookingPaymentFailedEvent event) {
+        publish(event.getBookingId().toString(), event);
+    }
+
+    public void publishBookingExpired(BookingExpiredEvent event) {
         publish(event.getBookingId().toString(), event);
     }
 

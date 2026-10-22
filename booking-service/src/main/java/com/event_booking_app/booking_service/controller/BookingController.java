@@ -39,7 +39,8 @@ public class BookingController {
     ) {
         String currentUserId = authentication.getName();
         log.info("REST request to create booking for user: {}", currentUserId);
-        BookingResponse response = bookingService.createBooking(request, currentUserId);
+        BookingResponse response = bookingService.createBooking(
+                request, currentUserId, SecurityUtils.getEmail(authentication));
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

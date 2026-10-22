@@ -21,6 +21,12 @@ public class Booking {
     @Column(name = "user_id", nullable = false)
     private UUID userId;
 
+    // Captured from the access token at creation so asynchronous events (e.g. hold
+    // expiry, which has no user request) can still be emailed. Nullable: older rows
+    // and tokens without an email claim simply get in-app notifications only.
+    @Column(name = "user_email")
+    private String userEmail;
+
     @Column(name = "event_id", nullable = false)
     private UUID eventId;
 

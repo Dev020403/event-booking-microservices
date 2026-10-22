@@ -283,6 +283,57 @@ services:
       - kafka
       - service-registry
 
+  # ==========================================
+  # Mailpit (local SMTP sink + web UI at http://localhost:8025)
+  # ==========================================
+  mailpit:
+    image: axllent/mailpit:v1.31
+    container_name: mailpit
+    restart: unless-stopped
+
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # ==========================================
+  # Notification Service
+  # ==========================================
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+
+    container_name: notification-service
+    restart: unless-stopped
+
+    ports:
+      - "8086:8086"
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/notification_db
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST:-mailpit}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT:-1025}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME:-}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD:-}
+      SPRING_MAIL_SMTP_AUTH: ${SPRING_MAIL_SMTP_AUTH:-false}
+      SPRING_MAIL_SMTP_STARTTLS: ${SPRING_MAIL_SMTP_STARTTLS:-false}
+      NOTIFICATION_EMAIL_FROM: ${NOTIFICATION_EMAIL_FROM:-no-reply@event-booking.local}
+
+      JWT_SECRET: ${JWT_SECRET:-cGxlYXNlLXJlcGxhY2UtdGhpcy13aXRoLWEtc3Ryb25nLXNlY3JldC1rZXk=}
+
+    depends_on:
+      - postgres-db
+      - kafka
+      - service-registry
+      - mailpit
+
 # ==========================================
 # Volumes
 # ==========================================

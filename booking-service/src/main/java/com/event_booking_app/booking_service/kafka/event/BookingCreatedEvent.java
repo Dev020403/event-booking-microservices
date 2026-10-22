@@ -14,12 +14,20 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BookingCreatedEvent {
+    public static final String TYPE = "BOOKING_CREATED";
+
+    // Explicit type marker so consumers don't depend on this service's class names
+    @Builder.Default
+    private String eventType = TYPE;
+
     private UUID bookingId;
     private UUID userId;
+    private String userEmail;
     private UUID eventId;
     private UUID ticketTypeId;
     private Integer quantity;
     private BigDecimal totalAmount;
+    private String currency;
     private String status;
     private Instant createdAt;
 }
