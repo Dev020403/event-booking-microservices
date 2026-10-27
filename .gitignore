@@ -2,3 +2,13 @@
 .env
 .env.*
 !.env.example
+
+# Kubernetes secrets for local overlays
+k8s/overlays/*/secrets.env
+
+# Terraform: local state, plugins and real-AWS variable files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+infra/terraform/envs/aws.tfvars

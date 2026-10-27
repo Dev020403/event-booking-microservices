@@ -1,0 +1,107 @@
+# ==========================================
+# PostgreSQL (single instance, one database per service)
+# ==========================================
+# Keep the SQL in sync with docker/init-db.sql. It only runs when the volume is empty,
+# so adding a database later means `kubectl delete pvc data-postgres-db-0` (wipes data)
+# or creating it by hand with psql.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  init-db.sql: |
+    CREATE DATABASE user_db;
+    CREATE DATABASE event_db;
+    CREATE DATABASE inventory_db;
+    CREATE DATABASE payment_db;
+    CREATE DATABASE booking_db;
+    CREATE DATABASE notification_db;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+  labels:
+    app: postgres-db
+spec:
+  selector:
+    app: postgres-db
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-db
+  labels:
+    app: postgres-db
+spec:
+  serviceName: postgres-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-db
+  template:
+    metadata:
+      labels:
+        app: postgres-db
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: postgres
+            # Subdirectory so a provisioner-created lost+found doesn't block initdb
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""]
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\""]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 2Gi

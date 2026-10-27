@@ -1,0 +1,35 @@
+# Local kind cluster. Deploy with: kubectl apply -k k8s/overlays/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Must match the base, or the generated Secret's hashed name isn't wired into the pods
+namespace: event-booking
+
+resources:
+  - ../../base
+
+# Built from secrets.env (gitignored; copy secrets.env.example). Kustomize adds a
+# content hash to the name, so changing a value rolls the pods that use it.
+secretGenerator:
+  - name: app-secrets
+    envs:
+      - secrets.env
+
+# Images built and loaded by k8s/build-images.ps1
+images:
+  - name: event-booking/service-registry
+    newTag: local
+  - name: event-booking/api-gateway
+    newTag: local
+  - name: event-booking/user-service
+    newTag: local
+  - name: event-booking/event-service
+    newTag: local
+  - name: event-booking/inventory-service
+    newTag: local
+  - name: event-booking/payment-service
+    newTag: local
+  - name: event-booking/booking-service
+    newTag: local
+  - name: event-booking/notification-service
+    newTag: local

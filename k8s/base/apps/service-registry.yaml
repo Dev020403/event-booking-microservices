@@ -1,0 +1,79 @@
+# ==========================================
+# Eureka Service Registry
+# ==========================================
+# Kept so the gateway's lb:// routes work unchanged. Kubernetes Services already
+# provide discovery, so this can be removed once routes use http://<service>:<port>.
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-registry
+  labels:
+    app: service-registry
+spec:
+  selector:
+    app: service-registry
+  ports:
+    - name: http
+      port: 8761
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: service-registry
+  labels:
+    app: service-registry
+spec:
+  # Single node: the registry is not configured for peer replication
+  replicas: 1
+  selector:
+    matchLabels:
+      app: service-registry
+  template:
+    metadata:
+      labels:
+        app: service-registry
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      containers:
+        - name: service-registry
+          image: event-booking/service-registry
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8761
+          envFrom:
+            - configMapRef:
+                name: app-config
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 320Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

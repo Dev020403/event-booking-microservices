@@ -1,0 +1,27 @@
+# ==========================================
+# Non-secret settings shared by every Spring Boot service
+# ==========================================
+# Each service only reads the keys it binds, so extra keys are harmless.
+# Secrets (DB credentials, JWT secret) come from the app-secrets Secret, see overlays/.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://service-registry:8761/eureka/
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  SPRING_DATA_REDIS_HOST: redis
+
+  JWT_ACCESS_EXPIRY_MS: "900000"
+  JWT_REFRESH_EXPIRY_MS: "604800000"
+
+  SPRING_MAIL_HOST: mailpit
+  SPRING_MAIL_PORT: "1025"
+  SPRING_MAIL_SMTP_AUTH: "false"
+  SPRING_MAIL_SMTP_STARTTLS: "false"
+  NOTIFICATION_EMAIL_FROM: no-reply@event-booking.local
+
+  # Exposes /actuator/health/liveness and /readiness for the probes
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  # Size the heap from the container memory limit; restart instead of limping on after OOM
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"

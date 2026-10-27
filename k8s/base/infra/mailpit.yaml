@@ -1,0 +1,54 @@
+# ==========================================
+# Mailpit (local SMTP sink + web UI on 8025)
+# ==========================================
+# Dev only. A production overlay should drop this and point SPRING_MAIL_* at a real SMTP server.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    app: mailpit
+spec:
+  selector:
+    app: mailpit
+  ports:
+    - name: smtp
+      port: 1025
+    - name: http
+      port: 8025
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels:
+    app: mailpit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mailpit
+  template:
+    metadata:
+      labels:
+        app: mailpit
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mailpit
+          image: axllent/mailpit:v1.31
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          readinessProbe:
+            tcpSocket:
+              port: smtp
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi

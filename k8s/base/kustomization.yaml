@@ -1,0 +1,26 @@
+# Environment-independent manifests. Deploy through an overlay (overlays/local),
+# which supplies the app-secrets Secret and the image tags.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: event-booking
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: event-booking
+
+resources:
+  - namespace.yaml
+  - app-config.yaml
+  - infra/postgres.yaml
+  - infra/redis.yaml
+  - infra/kafka.yaml
+  - infra/mailpit.yaml
+  - apps/service-registry.yaml
+  - apps/api-gateway.yaml
+  - apps/user-service.yaml
+  - apps/event-service.yaml
+  - apps/inventory-service.yaml
+  - apps/payment-service.yaml
+  - apps/booking-service.yaml
+  - apps/notification-service.yaml

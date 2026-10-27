@@ -1,0 +1,150 @@
+# ==========================================
+# Zookeeper + Kafka (single broker, same images as docker-compose)
+# ==========================================
+# enableServiceLinks is off on every pod: Kubernetes would otherwise inject
+# KAFKA_PORT / ZOOKEEPER_PORT env vars, which the Confluent images treat as
+# config and refuse to start with.
+#
+# Data lives in emptyDir, like docker-compose (no volume): topics are lost when
+# the pod restarts. Use a StatefulSet with a PVC, or a managed Kafka, outside local dev.
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  labels:
+    app: zookeeper
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - name: client
+      port: 2181
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  labels:
+    app: zookeeper
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: zookeeper
+          image: confluentinc/cp-zookeeper:7.6.1
+          ports:
+            - name: client
+              containerPort: 2181
+          env:
+            - name: ZOOKEEPER_CLIENT_PORT
+              value: "2181"
+            - name: ZOOKEEPER_TICK_TIME
+              value: "2000"
+          readinessProbe:
+            tcpSocket:
+              port: client
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/zookeeper/data
+            - name: log
+              mountPath: /var/lib/zookeeper/log
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: log
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      port: 9092
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  replicas: 1
+  # Never run two brokers with the same id against one Zookeeper
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: kafka
+          image: confluentinc/cp-kafka:7.6.1
+          ports:
+            - name: kafka
+              containerPort: 9092
+          env:
+            - name: KAFKA_BROKER_ID
+              value: "1"
+            - name: KAFKA_ZOOKEEPER_CONNECT
+              value: zookeeper:2181
+            # In-cluster clients only; use `kubectl port-forward svc/kafka 9092` from the host
+            - name: KAFKA_LISTENERS
+              value: PLAINTEXT://0.0.0.0:9092
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: PLAINTEXT://kafka:9092
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256m -Xmx512m"
+          readinessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: kafka
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+      volumes:
+        - name: data
+          emptyDir: {}
