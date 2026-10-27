@@ -1,0 +1,7 @@
+# Copy to aws.tfvars when moving to real AWS. Set a billing alarm first.
+environment = "dev"
+aws_region  = "us-east-1"
+aws_profile = "your-aws-profile"
+use_floci   = false
+
+event_images_cors_allowed_origins = ["https://your-frontend.example.com"]

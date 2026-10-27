@@ -41,6 +41,28 @@ services:
       - "6379:6379"
 
   # ==========================================
+  # Floci (local AWS emulator, endpoint http://localhost:4566)
+  # ==========================================
+  floci:
+    image: floci/floci:2.3.0
+    container_name: floci
+    restart: unless-stopped
+
+    # Root is required to use the Docker socket, which Floci needs to start
+    # container-backed services (RDS, ElastiCache, MSK, ECS, EKS, Lambda).
+    user: root
+
+    environment:
+      FLOCI_STORAGE_MODE: hybrid
+
+    ports:
+      - "4566:4566"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - floci_data:/app/data
+
+  # ==========================================
   # Zookeeper
   # ==========================================
   zookeeper:
@@ -339,3 +361,4 @@ services:
 # ==========================================
 volumes:
   postgres_data:
+  floci_data:
