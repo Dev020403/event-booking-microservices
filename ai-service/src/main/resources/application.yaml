@@ -1,0 +1,30 @@
+server:
+  port: 8087
+
+spring:
+  application:
+    name: ai-service
+
+  ai:
+    model:
+      chat: google-genai
+    google:
+      genai:
+        api-key: ${GOOGLE_GENAI_API_KEY}   # set via env var / IntelliJ run config; never commit the key
+        chat:
+          model: gemini-3.8-flash   # pick a current free-tier model from AI Studio
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+eventmate:
+  ai:
+    system-prompt: >
+      You are EventMate AI, an assistant for an event booking platform.
+      Help users discover events and answer questions about bookings.
+      Be concise and accurate. If you do not know something, say so
+      instead of guessing.
