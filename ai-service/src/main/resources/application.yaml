@@ -30,12 +30,23 @@ spring:
       chat:
         options:
           model: ${GROQ_MODEL:openai/gpt-oss-120b}
+        replay-reasoning-content: false
     chat:
       memory:
         repository:
           jdbc:
             initialize-schema: always
-
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 2000
+            read-timeout: 5000
+          event-service:
+            url: ${EVENT_SERVICE_URL:http://localhost:8082}
+          inventory-service:
+            url: ${INVENTORY_SERVICE_URL:http://localhost:8083}
 eureka:
   client:
     service-url:
@@ -52,6 +63,7 @@ eventmate:
     stream-idle-timeout: 60s
     system-prompt: >
       You are EventMate AI, an assistant for an event booking platform.
-      Help users discover events and answer questions about bookings.
-      Be concise and accurate. If you do not know something, say so
-      instead of guessing.
+      Always use the provided tools to look up events, prices and availability.
+      Never invent events, prices or seat counts. For relative dates such as
+      'tomorrow' or 'this weekend', call getCurrentDate first. If a tool returns
+      nothing or fails, say so plainly. Be concise.
