@@ -4,15 +4,37 @@ server:
 spring:
   application:
     name: ai-service
-
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/event-booking-app}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:admin123}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  mvc:
+    async:
+      request-timeout: 120s
   ai:
     model:
-      chat: google-genai
-    google:
-      genai:
-        api-key: ${GOOGLE_GENAI_API_KEY}   # set via env var / IntelliJ run config; never commit the key
-        chat:
-          model: gemini-3.8-flash   # pick a current free-tier model from AI Studio
+      chat: openai
+    openai:
+      api-key: ${GROQ_API_KEY}
+      base-url: https://api.groq.com/openai/v1
+      chat:
+        options:
+          model: ${GROQ_MODEL:openai/gpt-oss-120b}
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always
 
 eureka:
   client:
@@ -21,8 +43,13 @@ eureka:
   instance:
     prefer-ip-address: true
 
+jwt:
+  secret: ${JWT_SECRET}
+
 eventmate:
   ai:
+    memory-window-size: 20
+    stream-idle-timeout: 60s
     system-prompt: >
       You are EventMate AI, an assistant for an event booking platform.
       Help users discover events and answer questions about bookings.

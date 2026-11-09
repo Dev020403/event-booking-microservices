@@ -1,32 +1,55 @@
 package com.event_booking_app.ai_service.service;
 
+import com.event_booking_app.ai_service.dto.ChatRequest;
+import com.event_booking_app.ai_service.dto.ChatStream;
+import com.event_booking_app.ai_service.entity.Conversation;
 import com.event_booking_app.ai_service.exception.AiProviderException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import com.event_booking_app.ai_service.dto.ChatResponse;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatService {
     private final ChatClient chatClient;
-    public String chat(String message){
-        log.debug("Sending chat request to model (length={})", message.length());
+    private final ConversationService conversationService;
+
+    public ChatResponse chat(UUID userId, ChatRequest request){
+        //Get conversation if not exist create one and use it
+        Conversation conversation = conversationService.resolve(userId, request.conversationId(), request.message());
         String reply;
-        try {
-            reply = chatClient.prompt()
-                    .user(message)
-                    .call()
-                    .content();
-        }catch (Exception ex){
+        try{
+            reply = prompt(conversation.getId(), request.message()).call().content();
+        }
+        catch (RuntimeException ex){
             throw new AiProviderException("Chat request to AI provider failed", ex);
         }
         if (reply == null || reply.isBlank()) {
             throw new AiProviderException("AI provider returned an empty response");
         }
-        return reply;
+        return new ChatResponse(conversation.getId(), reply);
+    }
+
+    public ChatStream stream(UUID userId, ChatRequest request) {
+        Conversation conversation =
+                conversationService.resolve(userId, request.conversationId(), request.message());
+        log.debug("Stream request (conversationId={}, length={})",
+                conversation.getId(), request.message().length());
+
+        Flux<String> tokens = prompt(conversation.getId(), request.message()).stream().content();
+        return new ChatStream(conversation.getId(), tokens);
+    }
+
+    private ChatClient.ChatClientRequestSpec prompt(UUID conversationId, String message) {
+        return chatClient.prompt()
+                .user(message)
+                .advisors(advisors -> advisors.param(ChatMemory.CONVERSATION_ID, conversationId.toString()));
     }
 }

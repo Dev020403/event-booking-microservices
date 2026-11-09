@@ -1,4 +1,6 @@
 package com.event_booking_app.ai_service.dto;
 
-public record ChatResponse(String reply) {
+import java.util.UUID;
+
+public record ChatResponse(UUID conversationId, String reply) {
 }
