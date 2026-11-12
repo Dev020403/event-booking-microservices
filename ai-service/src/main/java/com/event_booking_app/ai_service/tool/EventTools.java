@@ -51,6 +51,9 @@ public class EventTools {
         } catch (DateTimeParseException ex) {
             return EventSearchResult.failure("Dates must use the format YYYY-MM-DD.");
         }
+        if (from != null && to != null && from.isAfter(to)) {
+            return EventSearchResult.failure("fromDate must be on or before toDate.");
+        }
 
         try {
             EventPage page = eventClient.searchEvents(

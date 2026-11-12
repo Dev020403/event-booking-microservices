@@ -1,5 +1,6 @@
 package com.event_booking_app.ai_service.config;
 
+import com.event_booking_app.ai_service.tool.BookingTools;
 import com.event_booking_app.ai_service.tool.DateTimeTools;
 import com.event_booking_app.ai_service.tool.EventTools;
 import org.springframework.ai.chat.client.ChatClient;
@@ -25,11 +26,11 @@ public class ChatClientConfig {
 
     @Bean
     ChatClient chatClient(ChatClient.Builder builder, AiProperties properties, ChatMemory chatMemory,
-                          EventTools eventTools, DateTimeTools dateTimeTools) {
+                          EventTools eventTools, DateTimeTools dateTimeTools, BookingTools bookingTools) {
         return builder
                 .defaultSystem(properties.systemPrompt())
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
-                .defaultTools(eventTools, dateTimeTools)
+                .defaultTools(eventTools, dateTimeTools, bookingTools)
                 .build();
     }
 }

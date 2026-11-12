@@ -47,6 +47,8 @@ spring:
             url: ${EVENT_SERVICE_URL:http://localhost:8082}
           inventory-service:
             url: ${INVENTORY_SERVICE_URL:http://localhost:8083}
+          booking-service:
+            url: ${BOOKING_SERVICE_URL:http://localhost:8085}
 eureka:
   client:
     service-url:

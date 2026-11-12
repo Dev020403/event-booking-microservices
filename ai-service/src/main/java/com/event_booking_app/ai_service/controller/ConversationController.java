@@ -3,7 +3,7 @@ package com.event_booking_app.ai_service.controller;
 import com.event_booking_app.ai_service.dto.ConversationSummary;
 import com.event_booking_app.ai_service.dto.MessageView;
 import com.event_booking_app.ai_service.dto.PageResponse;
-import com.event_booking_app.ai_service.security.CurrentUser;
+import com.event_booking_app.ai_service.security.AuthenticatedUser;
 import com.event_booking_app.ai_service.service.ConversationService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -32,17 +32,17 @@ public class ConversationController {
     public PageResponse<ConversationSummary> list(@AuthenticationPrincipal Jwt jwt,
                                                   @RequestParam(defaultValue = "0") @Min(0) int page,
                                                   @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
-        return conversationService.list(CurrentUser.id(jwt), page, size);
+        return conversationService.list(AuthenticatedUser.from(jwt).id(), page, size);
     }
 
     @GetMapping("/{id}/messages")
     public List<MessageView> messages(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        return conversationService.messages(CurrentUser.id(jwt), id);
+        return conversationService.messages(AuthenticatedUser.from(jwt).id(), id);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
-        conversationService.delete(CurrentUser.id(jwt), id);
+        conversationService.delete(AuthenticatedUser.from(jwt).id(), id);
     }
 }

@@ -2,6 +2,7 @@ package com.event_booking_app.ai_service.client;
 
 import com.event_booking_app.ai_service.client.dto.EventCategory;
 import com.event_booking_app.ai_service.client.dto.EventPage;
+import com.event_booking_app.ai_service.client.dto.EventResponse;
 import com.event_booking_app.ai_service.client.dto.TicketTypeResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +20,9 @@ public interface EventClient {
                            @RequestParam(value = "fromDate", required = false) String fromDate,
                            @RequestParam(value = "toDate", required = false) String toDate,
                            @RequestParam("size") int size);
+
+    @GetMapping("/api/v1/events/{id}")
+    EventResponse getEvent(@PathVariable("id") UUID eventId);
 
     @GetMapping("/api/v1/events/{id}/ticket-types")
     List<TicketTypeResponse> getTicketTypes(@PathVariable("id") UUID eventId);

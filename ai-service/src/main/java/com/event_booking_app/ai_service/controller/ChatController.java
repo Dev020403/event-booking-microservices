@@ -5,11 +5,9 @@ import com.event_booking_app.ai_service.dto.ChatRequest;
 import com.event_booking_app.ai_service.dto.ChatResponse;
 import com.event_booking_app.ai_service.dto.ChatStream;
 import com.event_booking_app.ai_service.dto.StreamEvents;
-import com.event_booking_app.ai_service.security.CurrentUser;
+import com.event_booking_app.ai_service.security.AuthenticatedUser;
 import com.event_booking_app.ai_service.service.ChatService;
 import jakarta.validation.Valid;
-import java.util.Objects;
-import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -34,7 +32,7 @@ public class ChatController {
 
     @PostMapping("/chat")
     public ChatResponse chat(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody ChatRequest request) {
-        return chatService.chat(CurrentUser.id(jwt), request);
+        return chatService.chat(AuthenticatedUser.from(jwt), request);
     }
 
     @PostMapping(path = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -42,7 +40,7 @@ public class ChatController {
                                                 @Valid @RequestBody ChatRequest request) {
         // Validation and ownership errors are thrown here, before streaming begins,
         // so they are returned as normal HTTP error responses.
-        ChatStream chatStream = chatService.stream(CurrentUser.id(jwt), request);
+        ChatStream chatStream = chatService.stream(AuthenticatedUser.from(jwt), request);
 
         Flux<ServerSentEvent<Object>> tokens = chatStream.tokens()
                 .map(text -> event("token", new StreamEvents.Token(text)))

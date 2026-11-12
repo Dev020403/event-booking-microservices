@@ -4,6 +4,8 @@ import com.event_booking_app.ai_service.dto.ChatRequest;
 import com.event_booking_app.ai_service.dto.ChatStream;
 import com.event_booking_app.ai_service.entity.Conversation;
 import com.event_booking_app.ai_service.exception.AiProviderException;
+import com.event_booking_app.ai_service.security.AuthenticatedUser;
+import com.event_booking_app.ai_service.tool.ToolUserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -21,14 +23,13 @@ public class ChatService {
     private final ChatClient chatClient;
     private final ConversationService conversationService;
 
-    public ChatResponse chat(UUID userId, ChatRequest request){
-        //Get conversation if not exist create one and use it
-        Conversation conversation = conversationService.resolve(userId, request.conversationId(), request.message());
+    public ChatResponse chat(AuthenticatedUser user, ChatRequest request) {
+        Conversation conversation =
+                conversationService.resolve(user.id(), request.conversationId(), request.message());
         String reply;
-        try{
-            reply = prompt(conversation.getId(), request.message()).call().content();
-        }
-        catch (RuntimeException ex){
+        try {
+            reply = prompt(user, conversation.getId(), request.message()).call().content();
+        } catch (RuntimeException ex) {
             throw new AiProviderException("Chat request to AI provider failed", ex);
         }
         if (reply == null || reply.isBlank()) {
@@ -37,19 +38,20 @@ public class ChatService {
         return new ChatResponse(conversation.getId(), reply);
     }
 
-    public ChatStream stream(UUID userId, ChatRequest request) {
+    public ChatStream stream(AuthenticatedUser user, ChatRequest request) {
         Conversation conversation =
-                conversationService.resolve(userId, request.conversationId(), request.message());
+                conversationService.resolve(user.id(), request.conversationId(), request.message());
         log.debug("Stream request (conversationId={}, length={})",
                 conversation.getId(), request.message().length());
 
-        Flux<String> tokens = prompt(conversation.getId(), request.message()).stream().content();
+        Flux<String> tokens = prompt(user, conversation.getId(), request.message()).stream().content();
         return new ChatStream(conversation.getId(), tokens);
     }
 
-    private ChatClient.ChatClientRequestSpec prompt(UUID conversationId, String message) {
+    private ChatClient.ChatClientRequestSpec prompt(AuthenticatedUser user, UUID conversationId, String message) {
         return chatClient.prompt()
                 .user(message)
+                .toolContext(ToolUserContext.asMap(user))
                 .advisors(advisors -> advisors.param(ChatMemory.CONVERSATION_ID, conversationId.toString()));
     }
 }

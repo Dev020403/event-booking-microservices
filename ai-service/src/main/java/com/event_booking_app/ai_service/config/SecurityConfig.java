@@ -31,9 +31,12 @@ public class SecurityConfig {
                 .build();
     }
 
-    /** Adapt this bean to however user-service signs tokens (RSA, JWK set URI, etc.). */
+    /**
+     * Verifies HS256 tokens signed by user-service with the same Base64-encoded secret.
+     * There is deliberately no default: a missing secret must fail startup, never fall back to a known key.
+     */
     @Bean
-    JwtDecoder jwtDecoder(@Value("${jwt.secret:${app.security.jwt.secret:cGxlYXNlLXJlcGxhY2UtdGhpcy13aXRoLWEtc3Ryb25nLXNlY3JldC1rZXk=}}") String base64Secret) {
+    JwtDecoder jwtDecoder(@Value("${jwt.secret}") String base64Secret) {
         SecretKey key = new SecretKeySpec(Base64.getDecoder().decode(base64Secret), "HmacSHA256");
         return NimbusJwtDecoder.withSecretKey(key)
                 .macAlgorithm(MacAlgorithm.HS256)
