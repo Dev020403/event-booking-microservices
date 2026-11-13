@@ -17,5 +17,12 @@ public record AiProperties(
         @NotBlank String systemPrompt,
         @DefaultValue("20") @Min(2) @Max(100) int memoryWindowSize,
         @DefaultValue("60s") @NotNull Duration streamIdleTimeout,
-        @DefaultValue("Asia/Kolkata") @NotNull ZoneId zoneId) {
+        @DefaultValue("Asia/Kolkata") @NotNull ZoneId zoneId,
+        @DefaultValue @NotNull RagProperties rag) {
+
+    public record RagProperties(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("4") @Min(1) @Max(20) int topK,
+            @DefaultValue("0.55") double similarityThreshold) {
+    }
 }
