@@ -4,7 +4,10 @@ import com.event_booking_app.ai_service.dto.ConversationSummary;
 import com.event_booking_app.ai_service.dto.MessageView;
 import com.event_booking_app.ai_service.dto.PageResponse;
 import com.event_booking_app.ai_service.entity.Conversation;
+import com.event_booking_app.ai_service.entity.ConversationMessage;
+import com.event_booking_app.ai_service.entity.MessageRole;
 import com.event_booking_app.ai_service.exception.ConversationNotFoundException;
+import com.event_booking_app.ai_service.repository.ConversationMessageRepository;
 import com.event_booking_app.ai_service.repository.ConversationRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,7 +16,6 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ public class ConversationService {
 
     private final Clock clock;
     private final ConversationRepository conversationRepository;
+    private final ConversationMessageRepository messageRepository;
     private final ChatMemory chatMemory;
 
     @Transactional
@@ -52,18 +55,31 @@ public class ConversationService {
                 result.getTotalElements(), result.getTotalPages());
     }
 
+    /** Full transcript from the display table; the LLM's sliding-window memory is not used here. */
     @Transactional(readOnly = true)
     public List<MessageView> messages(UUID userId, UUID conversationId) {
         getOwned(userId, conversationId);
-        return chatMemory.get(conversationId.toString()).stream()
-                .filter(message -> message.getMessageType() != MessageType.SYSTEM)
-                .map(message -> new MessageView(message.getMessageType().name(), message.getText()))
+        return messageRepository.findByConversationIdOrderByIdAsc(conversationId).stream()
+                .map(message -> new MessageView(message.getRole().name(), message.getContent()))
                 .toList();
+    }
+
+    /**
+     * Persists one completed exchange. Called only after the model replied successfully, so a failed
+     * request never leaves a dangling user message without an answer.
+     */
+    @Transactional
+    public void recordExchange(UUID conversationId, String userMessage, String assistantReply) {
+        Instant now = clock.instant();
+        messageRepository.saveAll(List.of(
+                new ConversationMessage(conversationId, MessageRole.USER, userMessage, now),
+                new ConversationMessage(conversationId, MessageRole.ASSISTANT, assistantReply, now)));
     }
 
     @Transactional
     public void delete(UUID userId, UUID conversationId) {
         Conversation conversation = getOwned(userId, conversationId);
+        messageRepository.deleteByConversationId(conversationId);
         conversationRepository.delete(conversation);
         chatMemory.clear(conversationId.toString());
     }
